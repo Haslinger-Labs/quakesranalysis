@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import textwrap
+import json
 
 from quakesranalysis import scanhandler
 from quakesranalysis import gaussianmixture
@@ -30,7 +31,55 @@ def printUsage():
         \t-offsettime\tPlot offset change (mean of all samples) over time
         \t-allan\tPlot allan deviations for all sampled points along main axis
         \t-decompose\tDecompose gaussian mixture for all channels
+        \t-metrics\tCollect core metrics in metrics.json for this run
     """).format(sys.argv[0]))
+
+def metrics_collect_core(fileprefix, scan, metrics = {}):
+    #   Allan deviation -> converges or diverges? How well is it a 1/r?
+
+    metrics['core'] = {}
+
+    # Spans
+
+    meanI, stdI, meanQ, stdQ = scan.get_signal_mean_iq()
+    meanIZ, stdIZ, meanQZ, stdQZ = scan.get_zero_mean_iq()
+    if meanIZ is not None:
+        meanIDiff, stdIDiff, meanQDiff, stdQDiff = scan.get_diff_mean_iq()
+
+    metrics['core']['vpp_signalI'] = np.max(meanI) - np.min(meanI)
+    metrics['core']['vpp_signalQ'] = np.max(meanQ) - np.min(meanQ)
+    metrics['core']['mean_signalI'] = np.mean(meanI)
+    metrics['core']['mean_signalQ'] = np.mean(meanQ)
+    metrics['core']['maxnoise_signalI'] = np.max(stdI)
+    metrics['core']['maxnoise_signalQ'] = np.max(stdQ)
+    metrics['core']['meannoise_signalI'] = np.mean(stdI)
+    metrics['core']['meannoise_signalQ'] = np.mean(stdQ)
+    if meanIZ is not None:
+        metrics['core']['vpp_signalIZero'] = np.max(meanIZ) - np.min(meanIZ)
+        metrics['core']['vpp_signalQZero'] = np.max(meanQZ) - np.min(meanQZ)
+        metrics['core']['vpp_signalIDiff'] = np.max(meanIDiff) - np.min(meanIDiff)
+        metrics['core']['vpp_signalQDiff'] = np.max(meanQDiff) - np.min(meanQDiff)
+        metrics['core']['mean_signalIZero'] = np.mean(meanIZ)
+        metrics['core']['mean_signalQZero'] = np.mean(meanQZ)
+        metrics['core']['mean_signalIDiff'] = np.mean(meanIDiff)
+        metrics['core']['mean_signalQDiff'] = np.mean(meanQDiff)
+        metrics['core']['maxnoise_signalIZero'] = np.max(stdIZ)
+        metrics['core']['maxnoise_signalQZero'] = np.max(stdQZ)
+        metrics['core']['maxnoise_signalIDiff'] = np.max(stdIDiff)
+        metrics['core']['maxnoise_signalQDiff'] = np.max(stdQDiff)
+        metrics['core']['meannoise_signalIZero'] = np.mean(stdIZ)
+        metrics['core']['meannoise_signalQZero'] = np.mean(stdQZ)
+        metrics['core']['meannoise_signalIDiff'] = np.mean(stdIDiff)
+        metrics['core']['meannoise_signalQDiff'] = np.mean(stdQDiff)
+
+    return metrics
+
+def metrics_write(fileprefix, scan, metrics):
+    # Write metrics file with all collected metrics ...
+    with open(f"{fileprefix}_metrics.json", "w") as outfile:
+        outfile.write(json.dumps(metrics))
+
+    print("[METRICS] Written {fileprefix}_metrics.json")
 
 def plot_allan(fileprefix, scan):
     print(f"[ALLAN] Starting for {fileprefix}")
@@ -73,14 +122,31 @@ def plot_allan(fileprefix, scan):
     plt.close(fig)
     print(f"[ALLAN] Written {fileprefix}_allan")
 
+    fig, ax = plt.subplots()
+    ax.set_title(f"Worst Allan deviation (from all {scan.get_main_axis_symbol()})")
+    ax.set_ylabel("Allan deviation")
+    ax.set_xlabel("Time (samples)")
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    for channel in worstres:
+        ax.plot(worstres[channel]['taus'], worstres[channel]['ad'], label = f"{channel}")
+    ax.legend()
+    ax.grid()
 
-def plot_decompose(fileprefix, scan, debugplots = False):
+    plt.tight_layout()
+    plt.savefig(f"{fileprefix}_allan_log.svg")
+    plt.savefig(f"{fileprefix}_allan_log.png")
+    plt.close(fig)
+    print(f"[ALLAN] Written {fileprefix}_allan_log")
+
+
+def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False):
     print(f"[DECOMPOSE] Starting for {fileprefix}")
 
     res = gaussianmixture.decompose_gaussian_mixtures(scan, progressPrint = True, debugplots = debugplots, debugplotPrefix=f"{fileprefix}_fitdebug_")
     fig, ax = gaussianmixture.decompose_gaussian_mixtures_plotfit(scan, res)
 
-    plt.savefig(f"{fileprefix}_gaussianmixture_fit.svg")
+    #plt.savefig(f"{fileprefix}_gaussianmixture_fit.svg")
     plt.savefig(f"{fileprefix}_gaussianmixture_fit.png")
     print(f"[DECOMPOSE] Written {fileprefix}_gaussianmixture_fit")
     plt.close(fig)
@@ -88,12 +154,24 @@ def plot_decompose(fileprefix, scan, debugplots = False):
     # Show fit results
     print("[DECOMPOSE]")
     print("[DECOMPOSE] \tCenter\tFWHM\tOffset\tAmplitude")
+
+    metrics['decompose'] = {}
+
     for channel in res:
+        metrics['decompose'][channel] = []
+
         res[channel] = sorted(res[channel], key=lambda x : x['mu'])
         print(f"[DECOMPOSE] Channel {channel}")
         for params in res[channel]:
             fwhm = 2.0 * np.sqrt(2.0 * np.log(2)) * params['sigma']
             print(f"[DECOMPOSE] \t{params['mu']}\t{fwhm}\t{params['off']}\t{params['amp']}")
+            metrics['decompose'][channel].append({
+                'type' : params['type'],
+                'mu' : params['mu'],
+                'fwhm' : fwhm,
+                'off' : params['off'],
+                'amp' : params['amp']
+            })
     print("[DECOMPOSE]")
 
     # Generate component plots if debugplots is enabled
@@ -110,10 +188,18 @@ def plot_decompose(fileprefix, scan, debugplots = False):
             outfile.write("#Center\tFWHM\tOffset\tAmplitude\n")
             for params in res[channel]:
                 fwhm = 2.0 * np.sqrt(2.0 * np.log(2)) * params['sigma']
-                outfile.write(f"{params['mu']}\t{fwhm}\t{params['off']}\t{params['amp']}\n")
+                typestring = "Unknown"
+                if params['type'] == gaussianmixture.FUNTYPE_DIFFGAUSSIAN:
+                    typestring = "Diff. Gaussian"
+                elif params['type'] == gaussianmixture.FUNTYPE_GAUSSIAN:
+                    typestring = "Gaussian"
+
+                outfile.write(f"{typestring}\t{params['mu']}\t{fwhm}\t{params['off']}\t{params['amp']}\n")
         print(f"[DECOMPOSE] Written {fileprefix}_gaussianmixture_peaks_{channel}.dat")
 
     print("[DECOMPOSE] Finished")
+
+    return metrics
 
 
 def plot_offsettime(fileprefix, scan):
@@ -552,6 +638,8 @@ def main():
             jobs.append({ 'task' : 'decompose', 'debug' : True })
         elif sys.argv[i].strip() == "-allan":
             jobs.append({ 'task' : 'allan' })
+        elif sys.argv[i].strip() == "-metrics":
+            jobs.append({ 'task' : 'metrics' })
         elif sys.argv[i].strip() == "-wndnoise":
             n = 0
             if i == (len(sys.argv)-1):
@@ -596,6 +684,7 @@ def main():
         # Execute jobs ...
         scans = sc.get_scans()
         for iscan, scan in enumerate(scans):
+            metrics = {}
             if len(scans) > 2:
                 fnprefix = f"{jobfile}"
             else:
@@ -610,9 +699,12 @@ def main():
                 if job['task'] == "offsettime":
                     plot_offsettime(fnprefix, scan)
                 if job['task'] == "decompose":
-                    plot_decompose(fnprefix, scan, debugplots = job['debug'])
+                    metrics = plot_decompose(fnprefix, scan, metrics = metrics, debugplots = job['debug'])
                 if job['task'] == "allan":
                     plot_allan(fnprefix, scan)
+                if job['task'] == "metrics":
+                    metrics = metrics_collect_core(fnprefix, scan, metrics)
+                    metrics_write(fnprefix, scan, metrics)
 
 if __name__ == "__main__":
     main()
