@@ -36,17 +36,30 @@ scans and 1D scans. Those include:
   along the main axis (frequency, B0, ...) as well as a worst case Allan deviation
 * ```decompose``` decomposes the found signal, zero signal and difference signal
   into a mixture of Gaussians (this can be inspected by setting ```decomposedebug```)
+* ```mixfit``` does the same as decompose but for more different function types (Gaussian,
+  Cauchy, Difference of Gaussian, Difference of Cauchy, Constant, ...). Inspection
+  of the fitting behaviour is also possible using ```mixfitdebug```
+* ```metrics``` outputs collected metrics into a JSON data file. This should be
+  run at the end.
 
 All plots are stored along the source datafile and named with the same prefix.
 
 Example usage:
 
 ```
-quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -decompose -allan *_peak.npz 
+quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -mixfit -allan *_peak.npz 
 ```
 
 To see a list of all supported features execute without arguments:
 
 ```
 quakesrplot
+```
+
+When outputting debug plots for ```decompose``` or ```mixfit``` the ```QtAgg``` backend
+of ```matplotlib``` tends to crash sometimes. One can then launch the application using
+a different backend such as ```TkAgg``` on via the ```MPLBACKEND``` environment variable:
+
+```
+env MPLBACKEND=tkagg quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -mixfitdebug -allan *_peak.npz 
 ```

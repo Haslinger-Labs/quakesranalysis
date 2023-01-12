@@ -412,11 +412,17 @@ class MixtureFitter:
 
         return res
 
-    def fitMixture(self, x, inputData, debugplots = False, debugplotsshow = True, debugplotsprefix = ""):
+    def fitMixture(self, x, inputData, debugplots = False, debugplotsshow = True, debugplotsprefix = None, printprogress = False):
         fittedFunctions = { 'n' : 0 }
         chis = []
 
+        if printprogress:
+            print(f"[MIXFIT] Starting fit (prefix {debugplotsprefix})")
+
         while (len(chis) < 2) or ((chis[len(chis)-1] < chis[len(chis)-2]) and (len(chis) < self._maxiterations) and ((chis[len(chis)-2] - chis[len(chis)-1]) > self._minimumResiduumImprovement) and (chis[len(chis)-1] > self._stoperror)):
+            if printprogress:
+                print(f"[MIXFIT] Iteration {len(chis)+1} (prefix {debugplotsprefix})")
+
             # Subtract previously fitted functions
             stageInput = inputData - self.evalMixture(fittedFunctions, x)
 
@@ -453,8 +459,9 @@ class MixtureFitter:
             if debugplots:
                 if debugplotsshow:
                     plt.show()
-                else:
+                if debugplotsprefix is not None:
                     plt.savefig(f"{debugplotsprefix}fittry_iter_{len(chis)}.png")
+                plt.close()
 
             # Add best candidate to mixture (using the "fit result")
             n_new = fittedFunctions['n']
@@ -502,8 +509,9 @@ class MixtureFitter:
                 plt.tight_layout()
                 if debugplotsshow:
                     plt.show()
-                else:
-                    plt.savefig(f"{debugplotsprefix}fititer_{len(chis)}.png")
+                if debugplotsprefix is not None:
+                    plt.savefig(f"{debugplotsprefix}iter_{len(chis)}.png")
+                plt.close()
 
         # In case we include elements that did not improve or did not improve enough -> remove them from our result
         while (len(chis) > 2) and ((chis[len(chis)-1] > chis[len(chis)-2]) or ((chis[len(chis)-2] - chis[len(chis)-1]) < self._minimumResiduumImprovement)):
@@ -545,7 +553,7 @@ class MixtureFitter:
 
         return res
 
-    def mixtures2barplot(self, mixture, yunitlabel = ""):
+    def mixtures2barplot(self, mixture, yunitlabel = "", chanlabel = ""):
         if isinstance(mixture, Parameters):
             p = mixture.valuesdict()
         else:
@@ -567,11 +575,11 @@ class MixtureFitter:
         ax.set_yticks(ypos, labels=labeldata)
         ax.invert_yaxis()
         ax.set_xlabel("Amplitude")
-        ax.set_title("Fitted components")
+        ax.set_title(f"Fitted components {chanlabel}")
         ax.bar_label(hbars, fmt='%.2f')
         fig.tight_layout()
 
-        plt.show()
+        return fig, ax
 
 
 if __name__ == "__main__":

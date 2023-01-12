@@ -13,6 +13,7 @@ import json
 
 from quakesranalysis import scanhandler
 from quakesranalysis import gaussianmixture
+from quakesranalysis import mixturefit
 from quakesranalysis import allan
 
 def printUsage():
@@ -30,7 +31,9 @@ def printUsage():
         \t-wndnoise N\tPlots noise in a sliding window of N samples
         \t-offsettime\tPlot offset change (mean of all samples) over time
         \t-allan\tPlot allan deviations for all sampled points along main axis
-        \t-decompose\tDecompose gaussian mixture for all channels
+        \t-mixfit\tDecompose into Gaussian and Cauchy distributions for all channels
+        \t-mixfitdebug\tDump all fitting steps (might require MPLBACKEND=tkagg instead of qt?agg)
+        \t-decompose\tDecompose gaussian mixture for all channels (old fitter)
         \t-metrics\tCollect core metrics in metrics.json for this run
     """).format(sys.argv[0]))
 
@@ -79,7 +82,7 @@ def metrics_write(fileprefix, scan, metrics):
     with open(f"{fileprefix}_metrics.json", "w") as outfile:
         outfile.write(json.dumps(metrics))
 
-    print("[METRICS] Written {fileprefix}_metrics.json")
+    print(f"[METRICS] Written {fileprefix}_metrics.json")
 
 def plot_allan(fileprefix, scan):
     print(f"[ALLAN] Starting for {fileprefix}")
@@ -102,7 +105,7 @@ def plot_allan(fileprefix, scan):
         ax[i][0].grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_allanall.svg")
+    ##plt.savefig(f"{fileprefix}_allanall.svg")
     plt.savefig(f"{fileprefix}_allanall.png")
     plt.close(fig)
     print(f"[ALLAN] Written {fileprefix}_allanall")
@@ -117,7 +120,7 @@ def plot_allan(fileprefix, scan):
     ax.grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_allan.svg")
+    ##plt.savefig(f"{fileprefix}_allan.svg")
     plt.savefig(f"{fileprefix}_allan.png")
     plt.close(fig)
     print(f"[ALLAN] Written {fileprefix}_allan")
@@ -134,10 +137,62 @@ def plot_allan(fileprefix, scan):
     ax.grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_allan_log.svg")
+    #plt.savefig(f"{fileprefix}_allan_log.svg")
     plt.savefig(f"{fileprefix}_allan_log.png")
     plt.close(fig)
     print(f"[ALLAN] Written {fileprefix}_allan_log")
+
+
+def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False):
+    print(f"[MIXFIT] Starting for {fileprefix}")
+
+    mf = mixturefit.MixtureFitter()
+
+    # Decompose for each channel in the scan ...
+    scanx = scan.get_main_axis_data()
+    scanxsymbol = scan.get_main_axis_symbol()
+
+    meanI, _, meanQ, _ = scan.get_signal_mean_iq()
+    amp, _ = scan.get_signal_ampphase()
+
+    meanIZero, _, meanQZero, _ = scan.get_zero_mean_iq()
+    ampZero, _ = scan.get_zero_ampphase()
+    meanIDiff, _, meanQDiff, _ = scan.get_diff_mean_iq()
+    ampDiff, _ = scan.get_diff_ampphase()
+
+    metrics['decompose'] = {}
+
+    resmixture = {
+        'I' : mf.fitMixture(scanx, meanI, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_I", printprogress = True),
+        'Q' : mf.fitMixture(scanx, meanQ, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_Q", printprogress = True),
+        'A' : mf.fitMixture(scanx, amp, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_A", printprogress = True)
+    }
+
+    if meanIZero is not None:
+        resmixture = resmixture | {
+            'IZero' : mf.fitMixture(scanx, meanIZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_IZero", printprogress = True),
+            'QZero' : mf.fitMixture(scanx, meanQZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_QZero", printprogress = True),
+            'AZero' : mf.fitMixture(scanx, ampZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_AZero", printprogress = True),
+
+            'IDiff' : mf.fitMixture(scanx, meanIDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_IDiff", printprogress = True),
+            'QDiff' : mf.fitMixture(scanx, meanQDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_QDiff", printprogress = True),
+            'ADiff' : mf.fitMixture(scanx, ampDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_ADiff", printprogress = True)
+        }
+
+    chanlist = [ 'I', 'Q', 'A' ]
+    if meanIZero is not None:
+        chanlist = chanlist + [ 'IZero' , 'QZero' , 'AZero', 'IDiff', 'QDiff', 'ADiff' ]
+
+    for chan in chanlist:
+        fig, ax = mf.mixtures2barplot(resmixture[chan], yunitlabel = scanxsymbol, chanlabel = chan)
+        plt.savefig(f"{fileprefix}_mixfit_{chan}.png")
+        plt.close()
+        print(f"[MIXFIT] Written {fileprefix}_mixfit_{chan}")
+
+        metrics['decompose'][chan] = mf.mixtures2dictlist(resmixture[chan])
+
+    print("[MIXFIT] Done")
+    return metrics
 
 
 def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False):
@@ -325,7 +380,7 @@ def plot_offsettime(fileprefix, scan):
         ax[2][2].grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_offsettime.svg")
+    #plt.savefig(f"{fileprefix}_offsettime.svg")
     plt.savefig(f"{fileprefix}_offsettime.png")
     plt.close(fig)
     print(f"[OFFSETTIME] Written {fileprefix}_offsettime")
@@ -459,7 +514,7 @@ def plot_wndnoise(fileprefix, scan, job):
         ax[2][1].legend()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_wndnoise_{wndSize}.svg")
+    #plt.savefig(f"{fileprefix}_wndnoise_{wndSize}.svg")
     plt.savefig(f"{fileprefix}_wndnoise_{wndSize}.png")
     plt.close(fig)
     print(f"[WNDNOISE] Written {fileprefix}_wndnoise_{wndSize}")
@@ -487,7 +542,7 @@ def plot_ampphase(fileprefix, scan):
     ax[1].grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_signal_ap.svg")
+    #plt.savefig(f"{fileprefix}_signal_ap.svg")
     plt.savefig(f"{fileprefix}_signal_ap.png")
     print(f"[AMPHASE] Written {fileprefix}_signal")
     plt.close(fig)
@@ -509,7 +564,7 @@ def plot_ampphase(fileprefix, scan):
         ax[1].grid()
 
         plt.tight_layout()
-        plt.savefig(f"{fileprefix}_zero_ap.svg")
+        #plt.savefig(f"{fileprefix}_zero_ap.svg")
         plt.savefig(f"{fileprefix}_zero_ap.png")
         print(f"[AMPHASE] Written {fileprefix}_zero_ap")
         plt.close(fig)
@@ -530,7 +585,7 @@ def plot_ampphase(fileprefix, scan):
         ax[1].grid()
 
         plt.tight_layout()
-        plt.savefig(f"{fileprefix}_diff_ap.svg")
+        #plt.savefig(f"{fileprefix}_diff_ap.svg")
         plt.savefig(f"{fileprefix}_diff_ap.png")
         print(f"[AMPHASE] Written {fileprefix}_diff_ap")
         plt.close(fig)
@@ -560,7 +615,7 @@ def plot_iqmean(fileprefix, scan):
     ax[1].grid()
 
     plt.tight_layout()
-    plt.savefig(f"{fileprefix}_signal.svg")
+    #plt.savefig(f"{fileprefix}_signal.svg")
     plt.savefig(f"{fileprefix}_signal.png")
     print(f"[IQMEAN] Written {fileprefix}_signal")
     plt.close(fig)
@@ -584,7 +639,7 @@ def plot_iqmean(fileprefix, scan):
         ax[1].grid()
 
         plt.tight_layout()
-        plt.savefig(f"{fileprefix}_zero.svg")
+        #plt.savefig(f"{fileprefix}_zero.svg")
         plt.savefig(f"{fileprefix}_zero.png")
         print(f"[IQMEAN] Written {fileprefix}_zero")
         plt.close(fig)
@@ -607,7 +662,7 @@ def plot_iqmean(fileprefix, scan):
         ax[1].grid()
 
         plt.tight_layout()
-        plt.savefig(f"{fileprefix}_diff.svg")
+        #plt.savefig(f"{fileprefix}_diff.svg")
         plt.savefig(f"{fileprefix}_diff.png")
         print(f"[IQMEAN] Written {fileprefix}_diff")
         plt.close(fig)
@@ -636,6 +691,10 @@ def main():
             jobs.append({ 'task' : 'decompose', 'debug' : False })
         elif sys.argv[i].strip() == "-decomposedebug":
             jobs.append({ 'task' : 'decompose', 'debug' : True })
+        elif sys.argv[i].strip() == "-mixfit":
+            jobs.append({ 'task' : 'mixfit', 'debug' : False })
+        elif sys.argv[i].strip() == "-mixfitdebug":
+            jobs.append({ 'task' : 'mixfit', 'debug' : True })
         elif sys.argv[i].strip() == "-allan":
             jobs.append({ 'task' : 'allan' })
         elif sys.argv[i].strip() == "-metrics":
@@ -705,6 +764,8 @@ def main():
                 if job['task'] == "metrics":
                     metrics = metrics_collect_core(fnprefix, scan, metrics)
                     metrics_write(fnprefix, scan, metrics)
+                if job['task'] == "mixfit":
+                    metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'])
 
 if __name__ == "__main__":
     main()
