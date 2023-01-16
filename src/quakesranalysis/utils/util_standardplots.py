@@ -35,9 +35,10 @@ def printUsage():
         \t-mixfitdebug\tDump all fitting steps (might require MPLBACKEND=tkagg instead of qt?agg)
         \t-decompose\tDecompose gaussian mixture for all channels (old fitter)
         \t-metrics\tCollect core metrics in metrics.json for this run
+        \t-agreport\tWrite an aggregate report HTML file (agreport.html)
     """).format(sys.argv[0]))
 
-def metrics_collect_core(fileprefix, scan, metrics = {}):
+def metrics_collect_core(fileprefix, scan, metrics = {}, aggregateHTMLReport = None):
     #   Allan deviation -> converges or diverges? How well is it a 1/r?
 
     metrics['core'] = {}
@@ -77,14 +78,21 @@ def metrics_collect_core(fileprefix, scan, metrics = {}):
 
     return metrics
 
-def metrics_write(fileprefix, scan, metrics):
+def metrics_write(fileprefix, scan, metrics, aggregateHTMLReport = None):
     # Write metrics file with all collected metrics ...
     with open(f"{fileprefix}_metrics.json", "w") as outfile:
         outfile.write(json.dumps(metrics))
 
+    if aggregateHTMLReport is not None:
+        if "Metrics file" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append("Metrics file")
+        if f"Metrics file" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Metrics file"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Metrics file"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Metrics file"] + f"<a href=\"{fileprefix}_metrics.json\">{fileprefix}_metrics.json</a><br>"
+
     print(f"[METRICS] Written {fileprefix}_metrics.json")
 
-def plot_allan(fileprefix, scan):
+def plot_allan(fileprefix, scan, aggregateHTMLReport = None):
     print(f"[ALLAN] Starting for {fileprefix}")
 
     res, worstres = allan.get_allan_deviations(scan)
@@ -119,6 +127,14 @@ def plot_allan(fileprefix, scan):
     ax.legend()
     ax.grid()
 
+    if aggregateHTMLReport is not None:
+        if "Worst Allan deviation" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append("Worst Allan deviation")
+        if f"Worst Allan deviation" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation"] + f"<img src=\"{fileprefix}_allan.png\" alt=\"\"><br>"
+
+
     plt.tight_layout()
     ##plt.savefig(f"{fileprefix}_allan.svg")
     plt.savefig(f"{fileprefix}_allan.png")
@@ -142,8 +158,16 @@ def plot_allan(fileprefix, scan):
     plt.close(fig)
     print(f"[ALLAN] Written {fileprefix}_allan_log")
 
+    if aggregateHTMLReport is not None:
+        if "Worst Allan deviation (Log)" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append("Worst Allan deviation (Log)")
+        if f"Worst Allan deviation (Log)" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation (Log)"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation (Log)"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Worst Allan deviation (Log)"] + f"<img src=\"{fileprefix}_allan_log.png\" alt=\"\"><br>"
 
-def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False):
+
+
+def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False, aggregateHTMLReport = None):
     print(f"[MIXFIT] Starting for {fileprefix}")
 
     mf = mixturefit.MixtureFitter()
@@ -189,13 +213,20 @@ def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False
         plt.close()
         print(f"[MIXFIT] Written {fileprefix}_mixfit_{chan}")
 
+        if aggregateHTMLReport is not None:
+            if f"Mixture fit report ({chan})" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"Mixture fit report ({chan})")
+            if f"Mixture fit report ({chan})" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] + f"<img src=\"{fileprefix}_mixfit_{chan}.png\" alt=\"\"><br>"
+
         metrics['decompose'][chan] = mf.mixtures2dictlist(resmixture[chan])
 
     print("[MIXFIT] Done")
     return metrics
 
 
-def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False):
+def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False, aggregateHTMLReport = None):
     print(f"[DECOMPOSE] Starting for {fileprefix}")
 
     res = gaussianmixture.decompose_gaussian_mixtures(scan, progressPrint = True, debugplots = debugplots, debugplotPrefix=f"{fileprefix}_fitdebug_")
@@ -238,6 +269,14 @@ def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False):
             print(f"[DECOMPOSE] Written {fileprefix}_gaussianmixture_fitcomponents_{channel}.png")
             plt.close(fig)
 
+            if aggregateHTMLReport is not None:
+                if "Gaussian decomposition" not in aggregateHTMLReport['columntitles']:
+                    aggregateHTMLReport['columntitles'].append("Gaussian decomposition")
+                if f"Gaussian decomposition" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                    aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Gaussian decomposition"] = ""
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Gaussian decomposition"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Gaussian decomposition"] + f"<img src=\"{fileprefix}_gaussianmixture_fitcomponents_{channel}.png\" alt=\"\"><br>"
+
+
     for channel in res:
         with open(f"{fileprefix}_gaussianmixture_peaks_{channel}.dat", 'w') as outfile:
             outfile.write("#Center\tFWHM\tOffset\tAmplitude\n")
@@ -257,7 +296,7 @@ def plot_decompose(fileprefix, scan, metrics = {}, debugplots = False):
     return metrics
 
 
-def plot_offsettime(fileprefix, scan):
+def plot_offsettime(fileprefix, scan, aggregateHTMLReport = None):
     # Calculate offset drift over time
 
     print(f"[OFFSETTIME] Starting for {fileprefix}")
@@ -386,8 +425,16 @@ def plot_offsettime(fileprefix, scan):
     print(f"[OFFSETTIME] Written {fileprefix}_offsettime")
     print("[OFFSETTIME] Finished")
 
+    if aggregateHTMLReport is not None:
+        if "Offset over time" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append("Offset over time")
+        if f"Offset over time" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Offset over time"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Offset over time"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]["Offset over time"] + f"<img src=\"{fileprefix}_offsettime.png\" alt=\"\"><br>"
 
-def plot_wndnoise(fileprefix, scan, job):
+
+
+def plot_wndnoise(fileprefix, scan, job, aggregateHTMLReport = None):
     wndSize = job['n']
 
     print(f"[WNDNOISE] Starting for {fileprefix}, window size {wndSize}")
@@ -520,7 +567,14 @@ def plot_wndnoise(fileprefix, scan, job):
     print(f"[WNDNOISE] Written {fileprefix}_wndnoise_{wndSize}")
     print("[WNDNOISE] Finished")
 
-def plot_ampphase(fileprefix, scan):
+    if aggregateHTMLReport is not None:
+        if f"Noise in sliding window (wndsize={wndSize})" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append(f"Noise in sliding window (wndsize={wndSize})")
+        if f"Noise in sliding window (wndsize={wndSize})" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Noise in sliding window (wndsize={wndSize})"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Noise in sliding window (wndsize={wndSize})"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Noise in sliding window (wndsize={wndSize})"] + f"<img src=\"{fileprefix}_wndnoise_{wndSize}.png\" alt=\"\"><br>"
+
+def plot_ampphase(fileprefix, scan, aggregateHTMLReport = None):
     print(f"[AMPHASE] Starting for {fileprefix}")
 
     x = scan.get_main_axis_data()
@@ -547,6 +601,13 @@ def plot_ampphase(fileprefix, scan):
     print(f"[AMPHASE] Written {fileprefix}_signal")
     plt.close(fig)
 
+    if aggregateHTMLReport is not None:
+        if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append(f"Amplitude and phase (from I/Q)")
+        if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] + f"<img src=\"{fileprefix}_signal_ap.png\" alt=\"\"><br>"
+
     amp, phase = scan.get_zero_ampphase()
     if amp is not None:
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
@@ -569,6 +630,14 @@ def plot_ampphase(fileprefix, scan):
         print(f"[AMPHASE] Written {fileprefix}_zero_ap")
         plt.close(fig)
 
+        if aggregateHTMLReport is not None:
+            if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"Amplitude and phase (from I/Q)")
+            if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] + f"<img src=\"{fileprefix}_zero_ap.png\" alt=\"\"><br>"
+
+
         amp, phase = scan.get_diff_ampphase()
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
 
@@ -589,10 +658,18 @@ def plot_ampphase(fileprefix, scan):
         plt.savefig(f"{fileprefix}_diff_ap.png")
         print(f"[AMPHASE] Written {fileprefix}_diff_ap")
         plt.close(fig)
+
+        if aggregateHTMLReport is not None:
+            if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"Amplitude and phase (from I/Q)")
+            if f"Amplitude and phase (from I/Q)" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Amplitude and phase (from I/Q)"] + f"<img src=\"{fileprefix}_diff_ap.png\" alt=\"\"><br>"
+
     print("[AMPHASE] Finished")
 
 
-def plot_iqmean(fileprefix, scan):
+def plot_iqmean(fileprefix, scan, aggregateHTMLReport = None):
     print(f"[IQMEAN] Starting for {fileprefix}")
     x = scan.get_main_axis_data()
     xlabel = f"{scan.get_main_axis_title()} {scan.get_main_axis_symbol()}"
@@ -620,6 +697,13 @@ def plot_iqmean(fileprefix, scan):
     print(f"[IQMEAN] Written {fileprefix}_signal")
     plt.close(fig)
 
+    if aggregateHTMLReport is not None:
+        if f"I/Q samples" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append(f"I/Q samples")
+        if f"I/Q samples" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] + f"<img src=\"{fileprefix}_signal.png\" alt=\"\"><br>"
+
     meanI, stdI, meanQ, stdQ = scan.get_zero_mean_iq()
     if meanI is not None:
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
@@ -644,6 +728,13 @@ def plot_iqmean(fileprefix, scan):
         print(f"[IQMEAN] Written {fileprefix}_zero")
         plt.close(fig)
 
+        if aggregateHTMLReport is not None:
+            if f"I/Q samples" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"I/Q samples")
+            if f"I/Q samples" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] + f"<img src=\"{fileprefix}_zero.png\" alt=\"\"><br>"
+
         meanI, stdI, meanQ, stdQ = scan.get_diff_mean_iq()
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
 
@@ -667,6 +758,13 @@ def plot_iqmean(fileprefix, scan):
         print(f"[IQMEAN] Written {fileprefix}_diff")
         plt.close(fig)
 
+        if aggregateHTMLReport is not None:
+            if f"I/Q samples" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"I/Q samples")
+            if f"I/Q samples" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"I/Q samples"] + f"<img src=\"{fileprefix}_diff.png\" alt=\"\"><br>"
+
     print("[IQMEAN] Finished")
 
 
@@ -677,6 +775,8 @@ def main():
     if len(sys.argv) < 2:
         printUsage()
         sys.exit(0)
+
+    aggregateHTMLReport = None
 
     # We get called with one or more runfiles or NPZs as argument ...
     i = 1
@@ -699,6 +799,11 @@ def main():
             jobs.append({ 'task' : 'allan' })
         elif sys.argv[i].strip() == "-metrics":
             jobs.append({ 'task' : 'metrics' })
+        elif sys.argv[i].strip() == "-agreport":
+            aggregateHTMLReport = {
+                'reportdata' : [],
+                'columntitles' : []
+            }
         elif sys.argv[i].strip() == "-wndnoise":
             n = 0
             if i == (len(sys.argv)-1):
@@ -743,6 +848,14 @@ def main():
         # Execute jobs ...
         scans = sc.get_scans()
         for iscan, scan in enumerate(scans):
+            if aggregateHTMLReport is not None:
+                aggregateHTMLReport['reportdata'].append({})
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Run'] = jobfile
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Scan'] = str(scan)
+                if "Run" not in aggregateHTMLReport['columntitles']:
+                    aggregateHTMLReport['columntitles'].append("Run")
+                    aggregateHTMLReport['columntitles'].append("Scan")
+
             metrics = {}
             if len(scans) > 2:
                 fnprefix = f"{jobfile}"
@@ -750,22 +863,63 @@ def main():
                 fnprefix = f"{jobfile}_scan{iscan}"
             for job in jobs:
                 if job['task'] == "iqmean":
-                    plot_iqmean(fnprefix, scan)
+                    plot_iqmean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "apmean":
-                    plot_ampphase(fnprefix, scan)
+                    plot_ampphase(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "wndnoise":
-                    plot_wndnoise(fnprefix, scan, job)
+                    plot_wndnoise(fnprefix, scan, job, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "offsettime":
-                    plot_offsettime(fnprefix, scan)
+                    plot_offsettime(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "decompose":
-                    metrics = plot_decompose(fnprefix, scan, metrics = metrics, debugplots = job['debug'])
+                    metrics = plot_decompose(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "allan":
-                    plot_allan(fnprefix, scan)
+                    plot_allan(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "metrics":
-                    metrics = metrics_collect_core(fnprefix, scan, metrics)
-                    metrics_write(fnprefix, scan, metrics)
+                    metrics = metrics_collect_core(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
+                    metrics_write(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "mixfit":
-                    metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'])
+                    metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
 
+    if aggregateHTMLReport is not None:
+        # Generate webpage containing a table with all generated graphics
+        print("[AGREPORT] Writing "+str(os.path.join(os.path.dirname(os.path.realpath(f"{fnprefix}")), "agreport.html")))
+        with open(os.path.join(os.path.dirname(os.path.realpath(f"{fnprefix}")), "agreport.html"), "w") as htmlout:
+            htmlout.write(textwrap.dedent("""
+                <!DOCTYPE HTML>
+                <html>
+                    <head>
+                        <title> QUAK/ESR report output </title>
+                        <style type="text/css">
+                        <!--
+                            td {
+                                vertical-align: top;
+                            }
+                        -->
+                        </style>
+                    </head>
+                    <body>
+                        <table border="1">
+                            <thead>
+                                <tr>
+            """))
+            for colmn in aggregateHTMLReport['columntitles']:
+                htmlout.write(f"<td>{colmn}</td>")
+            htmlout.write(textwrap.dedent("""
+                                </tr>
+                            </thead>
+                            <tbody>
+            """))
+
+            for run in aggregateHTMLReport['reportdata']:
+                htmlout.write("<tr>")
+                for colmn in aggregateHTMLReport['columntitles']:
+                    htmlout.write(f"<td>{run[colmn]}</td>")
+
+            htmlout.write(textwrap.dedent("""
+                            </tbody>
+                        </table>
+                    </body>
+                </html>
+            """))
 if __name__ == "__main__":
     main()
