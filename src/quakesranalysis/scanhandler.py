@@ -69,7 +69,7 @@ class QUAKESRScan:
         self._filename = filename
 
     def get_scans(self):
-        return [ self ]
+        return ( None, None, None, [ self ] )
 
     def get_main_axis_title(self):
         return self._main_axis_title
@@ -80,113 +80,217 @@ class QUAKESRScan:
     def get_main_axis_data(self):
         return self._main_axis_data
         
-    def get_raw_signal_iq(self):
-        return self._sigI, self._sigQ
-    def get_raw_zero_iq(self):
-        return self._sigIZero, self._sigQZero
+    def get_raw_signal_iq(self, slice = None):
+        if slice is None:
+            return self._sigI, self._sigQ
+        else:
+            if (slice[0] > len(self._sigI[0])) or (slice[0] < 0):
+                raise IndexError("Slice start has to be positive and within length of captured data")
+            if (slice[1] < 0):
+                raise IndexError("Slice length has to be a positive integer")
+            if (slice[0] + slice[1] >= len(self._sigI[0])):
+                # Clamp to last segment ...
+                slice[1] = len(self._sigI[0]) - slice[0]
 
-    def get_signal_mean_iq(self):
-        if self._sigI_Mean is not None:
+            return self._sigI[:, slice[0] : slice[0] + slice[1]], self._sigQ[:, slice[0] : slice[0] + slice[1]]
+    def get_raw_zero_iq(self, slice = None):
+        if slice is None:
+            return self._sigIZero, self._sigQZero
+        else:
+            if (slice[0] > len(self._sigIZero[0])) or (slice[0] < 0):
+                raise IndexError("Slice start has to be positive and within length of captured data")
+            if (slice[1] < 0):
+                raise IndexError("Slice length has to be a positive integer")
+            if (slice[0] + slice[1] >= len(self._sigI)):
+                # Clamp to last segment ...
+                slice[1] = len(self._sigIZero[0]) - slice[0]
+            return self._sigIZero[:, slice[0] : slice[0] + slice[1]], self._sigQZero[:, slice[0] : slice[0] + slice[1]]
+
+    def get_signal_mean_iq(self, slice = None):
+        if slice is None:
+            if self._sigI_Mean is not None:
+                return self._sigI_Mean, self._sigI_Std, self._sigQ_Mean, self._sigQ_Std
+
+            self._sigI_Mean = np.zeros(self._main_axis_data.shape)
+            self._sigQ_Mean = np.zeros(self._main_axis_data.shape)
+            self._sigI_Std = np.zeros(self._main_axis_data.shape)
+            self._sigQ_Std = np.zeros(self._main_axis_data.shape)
+            
+            for i in range(len(self._main_axis_data)):
+                self._sigI_Mean[i] = np.mean(self._sigI[i])
+                self._sigQ_Mean[i] = np.mean(self._sigQ[i])
+                self._sigI_Std[i] = np.std(self._sigI[i])
+                self._sigQ_Std[i] = np.std(self._sigQ[i])
+
             return self._sigI_Mean, self._sigI_Std, self._sigQ_Mean, self._sigQ_Std
+        else:
+            sigi, sigq = self.get_raw_signal_iq(slice = slice)
 
-        self._sigI_Mean = np.zeros(self._main_axis_data.shape)
-        self._sigQ_Mean = np.zeros(self._main_axis_data.shape)
-        self._sigI_Std = np.zeros(self._main_axis_data.shape)
-        self._sigQ_Std = np.zeros(self._main_axis_data.shape)
-        
-        for i in range(len(self._main_axis_data)):
-            self._sigI_Mean[i] = np.mean(self._sigI[i])
-            self._sigQ_Mean[i] = np.mean(self._sigQ[i])
-            self._sigI_Std[i] = np.std(self._sigI[i])
-            self._sigQ_Std[i] = np.std(self._sigQ[i])
+            sigI_Mean = np.zeros(self._main_axis_data.shape)
+            sigQ_Mean = np.zeros(self._main_axis_data.shape)
+            sigI_Std = np.zeros(self._main_axis_data.shape)
+            sigQ_Std = np.zeros(self._main_axis_data.shape)
 
-        return self._sigI_Mean, self._sigI_Std, self._sigQ_Mean, self._sigQ_Std
+            for i in range(len(self._main_axis_data)):
+                sigI_Mean[i] = np.mean(sigi[i])
+                sigQ_Mean[i] = np.mean(sigq[i])
+                sigI_Std[i] = np.std(sigi[i])
+                sigQ_Std[i] = np.std(sigq[i])
 
-    def get_signal_ampphase(self):
-        if self._sig_Amp is not None:
+            return sigI_Mean, sigI_Std, sigQ_Mean, sigQ_Std
+
+    def get_signal_ampphase(self, slice = None):
+        if slice is None:
+            if self._sig_Amp is not None:
+                return self._sig_Amp, self._sig_Phase
+
+            if self._sigI_Mean is None:
+                # Generate mean and standard deviations
+                _, _, _, _ = self.get_signal_mean_iq()
+
+            self._sig_Amp = np.sqrt(self._sigI_Mean * self._sigI_Mean + self._sigQ_Mean * self._sigQ_Mean)
+            self._sig_Phase = np.arctan(self._sigQ_Mean / self._sigI_Mean)
+
             return self._sig_Amp, self._sig_Phase
+        else:
+            sigIMean, sigIStd, sigQMean, sigQStd = self.get_signal_mean_iq(slice = slice)
 
-        if self._sigI_Mean is None:
-            # Generate mean and standard deviations
-            _, _, _, _ = self.get_signal_mean_iq()
+            return (
+                np.sqrt(sigIMean * sigIMean + sigQMean * sigQMean),
+                np.arctan(sigQMean / sigIMean)
+            )
 
-        self._sig_Amp = np.sqrt(self._sigI_Mean * self._sigI_Mean + self._sigQ_Mean * self._sigQ_Mean)
-        self._sig_Phase = np.arctan(self._sigQ_Mean / self._sigI_Mean)
+    def get_zero_mean_iq(self, slice = None):
+        if slice is None:
+            if self._sigIZero is None:
+                # This has not been a diffscan ...
+                return None, None, None, None
 
-        return self._sig_Amp, self._sig_Phase
+            if self._sigIZero_Mean is not None:
+                return self._sigIZero_Mean, self._sigIZero_Std, self._sigQZero_Mean, self._sigQZero_Std
 
-    def get_zero_mean_iq(self):
-        if self._sigIZero is None:
-            # This has not been a diffscan ...
-            return None, None, None, None
+            self._sigIZero_Mean = np.zeros(self._main_axis_data.shape)
+            self._sigQZero_Mean = np.zeros(self._main_axis_data.shape)
+            self._sigIZero_Std = np.zeros(self._main_axis_data.shape)
+            self._sigQZero_Std = np.zeros(self._main_axis_data.shape)
+            
+            for i in range(len(self._main_axis_data)):
+                self._sigIZero_Mean[i] = np.mean(self._sigIZero[i])
+                self._sigQZero_Mean[i] = np.mean(self._sigQZero[i])
+                self._sigIZero_Std[i] = np.std(self._sigIZero[i])
+                self._sigQZero_Std[i] = np.std(self._sigQZero[i])
 
-        if self._sigIZero_Mean is not None:
             return self._sigIZero_Mean, self._sigIZero_Std, self._sigQZero_Mean, self._sigQZero_Std
+        else:
+            if self._sigIZero is None:
+                return None, None, None, None
 
-        self._sigIZero_Mean = np.zeros(self._main_axis_data.shape)
-        self._sigQZero_Mean = np.zeros(self._main_axis_data.shape)
-        self._sigIZero_Std = np.zeros(self._main_axis_data.shape)
-        self._sigQZero_Std = np.zeros(self._main_axis_data.shape)
-        
-        for i in range(len(self._main_axis_data)):
-            self._sigIZero_Mean[i] = np.mean(self._sigIZero[i])
-            self._sigQZero_Mean[i] = np.mean(self._sigQZero[i])
-            self._sigIZero_Std[i] = np.std(self._sigIZero[i])
-            self._sigQZero_Std[i] = np.std(self._sigQZero[i])
+            if (slice[0] > len(self._sigIZero[0])) or (slice[0] < 0):
+                raise IndexError("Slice start has to be positive and within length of captured data")
+            if (slice[1] < 0):
+                raise IndexError("Slice length has to be a positive integer")
+            if (slice[0] + slice[1] >= len(self._sigI[0])):
+                # Clamp to last segment ...
+                slice[1] = len(self._sigIZero) - slice[0]
 
-        return self._sigIZero_Mean, self._sigIZero_Std, self._sigQZero_Mean, self._sigQZero_Std
+            sigIZero_Mean = np.zeros(self._main_axis_data.shape)
+            sigQZero_Mean = np.zeros(self._main_axis_data.shape)
+            sigIZero_Std = np.zeros(self._main_axis_data.shape)
+            sigQZero_Std = np.zeros(self._main_axis_data.shape)
 
-    def get_zero_ampphase(self):
-        if self._sigIZero is None:
-            # This has not been a diffscan ...
-            return None, None
+            for i in range(len(self._main_axis_data)):
+                sigIZero_Mean[i] = np.mean(self._sigIZero[i, slice[0] : slice[0] + slice[1]])
+                sigQZero_Mean[i] = np.mean(self._sigQZero[i, slice[0] : slice[0] + slice[1]])
+                sigIZero_Std[i] = np.std(self._sigIZero[i, slice[0] : slice[0] + slice[1]])
+                sigQZero_Std[i] = np.std(self._sigQZero[i, slice[0] : slice[0] + slice[1]])
 
-        if self._sigZero_Amp is not None:
+            return sigIZero_Mean, sigIZero_Std, sigQZero_Mean, sigQZero_Std
+
+    def get_zero_ampphase(self, slice = None):
+        if slice is None:
+            if self._sigIZero is None:
+                # This has not been a diffscan ...
+                return None, None
+
+            if self._sigZero_Amp is not None:
+                return self._sigZero_Amp, self._sigZero_Phase
+
+            if self._sigIZero_Mean is None:
+                # Generate mean and standard deviations
+                _, _, _, _ = self.get_zero_mean_iq()
+
+            self._sigZero_Amp = np.sqrt(self._sigIZero_Mean * self._sigIZero_Mean + self._sigQZero_Mean * self._sigQZero_Mean)
+            self._sigZero_Phase = np.arctan(self._sigQZero_Mean / self._sigIZero_Mean)
+
             return self._sigZero_Amp, self._sigZero_Phase
+        else:
+            sigIZero_Mean, _, sigQZero_Mean, _ = self.get_zero_mean_iq(slice = slice)
+            amp = np.sqrt(sigIZero_Mean * sigIZero_Mean + sigQZero_Mean * sigQZero_Mean)
+            phase = np.arctan(sigQZero_Mean, sigIZero_Mean)
+            return amp, phase
 
-        if self._sigIZero_Mean is None:
-            # Generate mean and standard deviations
+    def get_diff_mean_iq(self, slice = None):
+        if slice is None:
+            if self._sigIZero is None:
+                # This has not been a diffscan ...
+                return None, None, None, None
+
+            if self._sigIDiff_Mean is not None:
+                return self._sigIDiff_Mean, self._sigIDiff_Std, self._sigQDiff_Mean, self._sigQDiff_Std
+
+            # Ensure means are available ...
+            _, _, _, _ = self.get_signal_mean_iq()
             _, _, _, _ = self.get_zero_mean_iq()
 
-        self._sigZero_Amp = np.sqrt(self._sigIZero_Mean * self._sigIZero_Mean + self._sigQZero_Mean * self._sigQZero_Mean)
-        self._sigZero_Phase = np.arctan(self._sigQZero_Mean / self._sigIZero_Mean)
+            self._sigIDiff_Mean = self._sigIZero_Mean - self._sigI_Mean
+            self._sigQDiff_Mean = self._sigQZero_Mean - self._sigQ_Mean
+            self._sigIDiff_Std = np.sqrt(self._sigIZero_Std * self._sigIZero_Std + self._sigI_Std * self._sigI_Std)
+            self._sigQDiff_Std = np.sqrt(self._sigQZero_Std * self._sigQZero_Std + self._sigQ_Std * self._sigQ_Std)
 
-        return self._sigZero_Amp, self._sigZero_Phase
-
-    def get_diff_mean_iq(self):
-        if self._sigIZero is None:
-            # This has not been a diffscan ...
-            return None, None, None, None
-
-        if self._sigIDiff_Mean is not None:
             return self._sigIDiff_Mean, self._sigIDiff_Std, self._sigQDiff_Mean, self._sigQDiff_Std
+        else:
+            if self._sigIZero is None:
+                return None, None, None, None
 
-        # Ensure means are available ...
-        _, _, _, _ = self.get_signal_mean_iq()
-        _, _, _, _ = self.get_zero_mean_iq()
+            # Ensure means are available ...
+            sigI, sigIStd, sigQ, sigQStd = self.get_signal_mean_iq(slice = slice)
+            sigIZero, sigIZeroStd, sigQZero, sigQZeroStd = self.get_zero_mean_iq(slice = slice)
 
-        self._sigIDiff_Mean = self._sigIZero_Mean - self._sigI_Mean
-        self._sigQDiff_Mean = self._sigQZero_Mean - self._sigQ_Mean
-        self._sigIDiff_Std = np.sqrt(self._sigIZero_Std * self._sigIZero_Std + self._sigI_Std * self._sigI_Std)
-        self._sigQDiff_Std = np.sqrt(self._sigQZero_Std * self._sigQZero_Std + self._sigQ_Std * self._sigQ_Std)
+            sigIDiff_Mean = sigI - sigIZero
+            sigQDiff_Mean = sigQ - sigQZero
+            sigIDiff_Std = np.sqrt(sigIZeroStd * sigIZeroStd + sigIStd * sigIStd)
+            sigQDiff_Std = np.sqrt(sigQZeroStd * sigQZeroStd + sigQStd * sigQStd)
 
-        return self._sigIDiff_Mean, self._sigIDiff_Std, self._sigQDiff_Mean, self._sigQDiff_Std
+            return sigIDiff_Mean, sigIDiff_Std, sigQDiff_Mean, sigQDiff_Std
 
-    def get_diff_ampphase(self):
-        if self._sigIZero is None:
-            # This has not been a diffscan ...
-            return None, None
+    def get_diff_ampphase(self, slice = None):
+        if slice is None:
+            if self._sigIZero is None:
+                # This has not been a diffscan ...
+                return None, None
 
-        if self._sigDiff_Amp is not None:
+            if self._sigDiff_Amp is not None:
+                return self._sigDiff_Amp, self._sigDiff_Phase
+
+            # Make sure our means are present
+            _, _, _, _ = self.get_diff_mean_iq()
+
+            self._sigDiff_Amp = np.sqrt(self._sigIDiff_Mean * self._sigIDiff_Mean + self._sigQDiff_Mean * self._sigQDiff_Mean)
+            self._sigDiff_Phase = np.arctan(self._sigQDiff_Mean / self._sigIDiff_Mean)
+
             return self._sigDiff_Amp, self._sigDiff_Phase
+        else:
+            if self._sigIZero is None:
+                # This has not been a diffscan ...
+                return None, None
 
-        # Make sure our means are present
-        _, _, _, _ = self.get_diff_mean_iq()
+            sigIDiff_Mean, sigIDiff_Std, sigQDiff_Mean, sigQDiff_Std = self.get_diff_mean_iq()
+            
 
-        self._sigDiff_Amp = np.sqrt(self._sigIDiff_Mean * self._sigIDiff_Mean + self._sigQDiff_Mean * self._sigQDiff_Mean)
-        self._sigDiff_Phase = np.arctan(self._sigQDiff_Mean / self._sigIDiff_Mean)
+            amp = np.sqrt(sigIDiff_Mean*sigIDiff_Mean + sigQDiff_Mean*sigQDiff_Mean)
+            phase = np.arctan(sigQDiff_Mean / sigIDiff_Mean)
 
-        return self._sigDiff_Amp, self._sigDiff_Phase
+            return amp, phase
 
 class QUAKESRScan1D:
     @staticmethod

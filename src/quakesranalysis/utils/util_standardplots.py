@@ -768,6 +768,95 @@ def plot_iqmean(fileprefix, scan, aggregateHTMLReport = None):
     print("[IQMEAN] Finished")
 
 
+def plot_iqmean_sliced(fileprefix, scan, aggregateHTMLReport = None, nslices = 10):
+    print(f"[IQMEANSLICES] Starting for {fileprefix}")
+
+    sliceStart = 0
+    while sliceStart < len(scan.get_raw_signal_iq()[0][0]):
+        print(len(scan.get_raw_signal_iq()[0][0]))
+        dataslice = [sliceStart, nslices]
+
+        print(f"[IQMEANSLICES]\tStarting from {sliceStart}, {nslices} samples")
+
+        x = scan.get_main_axis_data()
+        xlabel = f"{scan.get_main_axis_title()} {scan.get_main_axis_symbol()}"
+
+        fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+        meanI, stdI, meanQ, stdQ = scan.get_signal_mean_iq(slice = dataslice)
+
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel("Signal $\mu V$")
+        ax[0].plot(x, meanI, label = "I")
+        ax[0].plot(x, meanQ, label = "Q")
+        ax[0].legend()
+        ax[0].grid()
+
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel("Noise $\mu V$")
+        ax[1].plot(x, stdI, label = "Istd")
+        ax[1].plot(x, stdQ, label = "Qstd")
+        ax[1].legend()
+        ax[1].grid()
+
+        plt.tight_layout()
+        #plt.savefig(f"{fileprefix}_signal.svg")
+        plt.savefig(f"{fileprefix}_signal_slices_{sliceStart}.png")
+        print(f"[IQMEANSLICES] Written {fileprefix}_signal_slices_{sliceStart}")
+        plt.close(fig)
+
+        meanI, stdI, meanQ, stdQ = scan.get_zero_mean_iq(slice = dataslice)
+        if meanI is not None:
+            fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+            ax[0].set_xlabel(xlabel)
+            ax[0].set_ylabel("Zero signal $\mu V$")
+            ax[0].plot(x, meanI, label = "IZero")
+            ax[0].plot(x, meanQ, label = "QZero")
+            ax[0].legend()
+            ax[0].grid()
+
+            ax[1].set_xlabel(xlabel)
+            ax[1].set_ylabel("Zero noise $\mu V$")
+            ax[1].plot(x, stdI, label = "IZero std")
+            ax[1].plot(x, stdQ, label = "QZero std")
+            ax[1].legend()
+            ax[1].grid()
+
+            plt.tight_layout()
+            #plt.savefig(f"{fileprefix}_zero.svg")
+            plt.savefig(f"{fileprefix}_zero_slices_{sliceStart}.png")
+            print(f"[IQMEANSLICES] Written {fileprefix}_zero_slices_{sliceStart}")
+            plt.close(fig)
+
+            meanI, stdI, meanQ, stdQ = scan.get_diff_mean_iq(slice = dataslice)
+            fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+            ax[0].set_xlabel(xlabel)
+            ax[0].set_ylabel("Difference signal $\mu V$")
+            ax[0].plot(x, meanI, label = "IDiff")
+            ax[0].plot(x, meanQ, label = "QDiff")
+            ax[0].legend()
+            ax[0].grid()
+
+            ax[1].set_xlabel(xlabel)
+            ax[1].set_ylabel("Difference noise $\mu V$")
+            ax[1].plot(x, stdI, label = "IDiff std")
+            ax[1].plot(x, stdQ, label = "QDiff std")
+            ax[1].legend()
+            ax[1].grid()
+
+            plt.tight_layout()
+            #plt.savefig(f"{fileprefix}_diff.svg")
+            plt.savefig(f"{fileprefix}_diff_slices_{sliceStart}.png")
+            print(f"[IQMEANSLICES] Written {fileprefix}_diff_slices_{sliceStart}")
+            plt.close(fig)
+
+        sliceStart = sliceStart + nslices
+
+    print("[IQMEANSLICES] Finished")
+
+
+
 def main():
     jobs = []
     jobfiles = []
@@ -804,6 +893,8 @@ def main():
                 'reportdata' : [],
                 'columntitles' : []
             }
+        elif sys.argv[i].strip() == "-timejitter":
+            jobs.append({ 'task' : 'timejitter' })
         elif sys.argv[i].strip() == "-wndnoise":
             n = 0
             if i == (len(sys.argv)-1):
@@ -820,6 +911,19 @@ def main():
             jobs.append({'task' : 'wndnoise', 'n' : n })
             # Skip N
             i = i + 1
+        elif sys.argv[i].strip() == "-iqslices":
+            n = 0
+            if i == (len(sys.argv)-1):
+                print("Missing slice length for iqslices")
+                sys.exit(1)
+            try:
+                n = int(sys.argv[i+1])
+            except:
+                print(f"Failed to interpret {sys.argv[i+1]} as window size (integer sample count)")
+                sys.exit(1)
+            jobs.append({'task' : 'iqmean_sliced', 'n' : n })
+            # Skip N
+            i = i+ 1
         else:
             if sys.argv[i].strip().startswith("-"):
                 print(f"Unrecognized option {sys.argv[i]}")
@@ -846,7 +950,8 @@ def main():
                 print(e)
 
         # Execute jobs ...
-        scans = sc.get_scans()
+        scanQuantity, scanQuantityTitle, scanQuantityData, scans = sc.get_scans()
+        print(scans)
         for iscan, scan in enumerate(scans):
             if aggregateHTMLReport is not None:
                 aggregateHTMLReport['reportdata'].append({})
@@ -857,7 +962,7 @@ def main():
                     aggregateHTMLReport['columntitles'].append("Scan")
 
             metrics = {}
-            if len(scans) > 2:
+            if len(scans) < 2:
                 fnprefix = f"{jobfile}"
             else:
                 fnprefix = f"{jobfile}_scan{iscan}"
@@ -879,6 +984,8 @@ def main():
                     metrics_write(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "mixfit":
                     metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
+                if job['task'] == "iqmean_sliced":
+                    plot_iqmean_sliced(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport, nslices = job['n'])
 
     if aggregateHTMLReport is not None:
         # Generate webpage containing a table with all generated graphics
