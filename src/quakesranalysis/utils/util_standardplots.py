@@ -27,14 +27,17 @@ def printUsage():
         set of plots is selected by different options:
 
         \t-iqmean\t\tGenerated I/Q mean and noise plots
+        \t-iqslices N\t\tPlot I/Q mean and noise plots for slices N samples long
         \t-apmean\t\tGenerate amplitude and phase from I/Q samples
         \t-wndnoise N\tPlots noise in a sliding window of N samples
         \t-offsettime\tPlot offset change (mean of all samples) over time
         \t-allan\tPlot allan deviations for all sampled points along main axis
+        \t-timejitter\tPlot time between samples
         \t-mixfit\tDecompose into Gaussian and Cauchy distributions for all channels
         \t-mixfitdebug\tDump all fitting steps (might require MPLBACKEND=tkagg instead of qt?agg)
         \t-decompose\tDecompose gaussian mixture for all channels (old fitter)
         \t-metrics\tCollect core metrics in metrics.json for this run
+        \t-agreport\tWrite an aggregate report HTML file (agreport.html)
     """).format(sys.argv[0]))
 
 def metrics_collect_core(fileprefix, scan, metrics = {}, aggregateHTMLReport = None):
@@ -766,6 +769,291 @@ def plot_iqmean(fileprefix, scan, aggregateHTMLReport = None):
 
     print("[IQMEAN] Finished")
 
+def plot_timejitter(fileprefix, scan, aggregateHTMLReport = None):
+    print(f"[TIMEJITTER] Starting for {fileprefix}")
+
+    meanT = scan.get_raw_signal_timestamps()
+    if meanT is None:
+        print(f"[TIMEJITTER] No timing data present")
+
+    meanTZero = scan.get_raw_zero_timestamps()
+
+    if meanTZero is None:
+        fig, ax = plt.subplots(1, 3, squeeze = False, figsize=(6.4*3, 4.8))
+    else:
+        fig, ax = plt.subplots(2, 3, squeeze = False, figsize=(6.4*3, 4.8*2))
+
+    dtSig = (meanT.flatten('F'))[1:] - (meanT.flatten('F'))[0:-1]
+    ax[0][0].set_title("Time difference signal")
+    ax[0][0].set_xlabel("Sample")
+    ax[0][0].set_ylabel("Time difference")
+    ax[0][0].plot(dtSig)
+    ax[0][0].grid()
+
+    ax[0][1].set_title("Time difference signal (detail, 99% quantile max)")
+    ax[0][1].set_xlabel("Sample")
+    ax[0][1].set_ylabel("Time difference")
+    ax[0][1].plot(dtSig)
+    ax[0][1].set_ylim([np.min(dtSig), np.quantile(dtSig, 0.99)])
+    ax[0][1].grid()
+
+    if meanTZero is not None:
+        dtZero = (meanTZero[1:].flatten('F') - meanTZero[0:-1].flatten('F'))
+        ax[1][0].set_title("Time difference reference / zero")
+        ax[1][0].set_xlabel("Sample")
+        ax[1][0].set_ylabel("Time difference")
+        ax[1][0].plot(dtZero)
+        ax[1][0].grid()
+
+        ax[1][1].set_title("Time difference reference / zero (detail, 99% quantile max)")
+        ax[1][1].set_xlabel("Sample")
+        ax[1][1].set_ylabel("Time difference")
+        ax[1][1].plot(dtZero)
+        ax[1][1].set_ylim([np.min(dtZero), np.quantile(dtZero, 0.99)])
+        ax[1][1].grid()
+
+    ax[0][2].set_title("Raw timestamps (signal)")
+    ax[0][2].set_xlabel("Sample")
+    ax[0][2].set_ylabel("Timestamp")
+    ax[0][2].plot(meanT.flatten('F'))
+    ax[0][2].grid()
+
+    if meanTZero is not None:
+        ax[1][2].set_title("Raw timestamps (reference / zero)")
+        ax[1][2].set_xlabel("Sample")
+        ax[1][2].set_ylabel("Timestamp")
+        ax[1][2].plot(meanTZero.flatten('F'))
+        ax[1][2].grid()
+
+    plt.tight_layout()
+    #plt.savefig(f"{fileprefix}_diff.svg")
+    plt.savefig(f"{fileprefix}_jitterplot.png")
+    print(f"[TIMEJITTER] Written {fileprefix}_jitterplot")
+    plt.close(fig)
+
+    if meanTZero is not None:
+        allts = np.sort(np.concatenate((meanT.flatten('F'), meanTZero.flatten('F'))))
+        fig, ax = plt.subplots(2, 1, squeeze = False, figsize=(6.4, 4.8 * 2))
+    else:
+        allts = np.sort(meanT.flatten('F'))
+        fig, ax = plt.subplots(1, 1, squeeze = False, figsize=(6.4, 4.8))
+
+    alldts = allts[1:] - allts[:-1]
+
+    ax[0][0].set_title("All timestamps and differences")
+    ax[0][0].set_xlabel("Sampling point")
+    ax[0][0].set_ylabel("Timestamp")
+    ax[0][0].plot(allts)
+    ax[0][0].grid()
+
+    if meanTZero is not None:
+        ax[1][0].set_title("All time differences")
+        ax[1][0].set_xlabel("Sampling point")
+        ax[1][0].set_ylabel("Time difference")
+        ax[1][0].plot(alldts)
+        ax[1][0].grid()
+
+    plt.tight_layout()
+    plt.savefig(f"{fileprefix}_timestamps.png")
+    print(f"[TIMEJITTER] Written {fileprefix}_timestamps")
+    plt.close(fig)
+
+    if aggregateHTMLReport is not None:
+        if f"Time Jitter" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append(f"Time Jitter")
+        if f"Time Jitter" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Time Jitter"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Time Jitter"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Time Jitter"] + f"<img src=\"{fileprefix}_jitter.png\" alt=\"\"><br>"
+
+    print("[TIMEJITTER] Done")
+
+
+def plot_powermean(fileprefix, scan, aggregateHTMLReport = None):
+    print(f"[POWERMEAN] Starting for {fileprefix}")
+    x = scan.get_main_axis_data()
+    xlabel = f"{scan.get_main_axis_title()} {scan.get_main_axis_symbol()}"
+
+    fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+    meanP, stdP = scan.get_signal_mean_power()
+
+    if meanP is None:
+        meanP = np.full((len(x)), np.nan)
+        stdP = np.full((len(x)), np.nan)
+
+    ax[0].set_xlabel(xlabel)
+    ax[0].set_ylabel("Power $dBm$")
+    ax[0].plot(x, meanP, label = "P")
+    ax[0].legend()
+    ax[0].grid()
+
+    ax[1].set_xlabel(xlabel)
+    ax[1].set_ylabel("Noise $dBm$")
+    ax[1].plot(x, stdP, label = "Pstd")
+    ax[1].legend()
+    ax[1].grid()
+
+    plt.tight_layout()
+    #plt.savefig(f"{fileprefix}_signal.svg")
+    plt.savefig(f"{fileprefix}_signal_power.png")
+    print(f"[POWERMEAN] Written {fileprefix}_signal_power")
+    plt.close(fig)
+
+    if aggregateHTMLReport is not None:
+        if f"Mean power" not in aggregateHTMLReport['columntitles']:
+            aggregateHTMLReport['columntitles'].append(f"Mean power")
+        if f"Mean power" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] = ""
+        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] + f"<img src=\"{fileprefix}_signal_power.png\" alt=\"\"><br>"
+
+    meanP, stdP = scan.get_zero_mean_power()
+
+    if meanP is not None:
+        fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel("Zero power $dBm$")
+        ax[0].plot(x, meanP, label = "PZero")
+        ax[0].legend()
+        ax[0].grid()
+
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel("Zero power noise $dBm$")
+        ax[1].plot(x, stdP, label = "PZero std")
+        ax[1].legend()
+        ax[1].grid()
+
+        plt.tight_layout()
+        #plt.savefig(f"{fileprefix}_zero.svg")
+        plt.savefig(f"{fileprefix}_zero_power.png")
+        print(f"[IQMEAN] Written {fileprefix}_zero_power")
+        plt.close(fig)
+
+        if aggregateHTMLReport is not None:
+            if f"Zero mean power" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"Zero mean power")
+            if f"Zero mean power" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] + f"<img src=\"{fileprefix}_zero_power.png\" alt=\"\"><br>"
+
+        meanP, stdP = scan.get_diff_mean_power()
+        fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel("Difference power $dBm$")
+        ax[0].plot(x, meanP, label = "PDiff")
+        ax[0].legend()
+        ax[0].grid()
+
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel("Difference power $dBmV$")
+        ax[1].plot(x, stdP, label = "PDiff std")
+        ax[1].legend()
+        ax[1].grid()
+
+        plt.tight_layout()
+        #plt.savefig(f"{fileprefix}_diff.svg")
+        plt.savefig(f"{fileprefix}_diff_power.png")
+        print(f"[IQMEAN] Written {fileprefix}_diff_power")
+        plt.close(fig)
+
+        if aggregateHTMLReport is not None:
+            if f"Difference mean power" not in aggregateHTMLReport['columntitles']:
+                aggregateHTMLReport['columntitles'].append(f"Difference mean power")
+            if f"Difference mean power" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Difference mean power"] = ""
+            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Difference mean power"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Difference mean power"] + f"<img src=\"{fileprefix}_diff_power.png\" alt=\"\"><br>"
+
+    print("[POWERMEAN] Finished")
+
+
+def plot_iqmean_sliced(fileprefix, scan, aggregateHTMLReport = None, nslices = 10):
+    print(f"[IQMEANSLICES] Starting for {fileprefix}")
+
+    sliceStart = 0
+    while sliceStart < len(scan.get_raw_signal_iq()[0][0]):
+        print(len(scan.get_raw_signal_iq()[0][0]))
+        dataslice = [sliceStart, nslices]
+
+        print(f"[IQMEANSLICES]\tStarting from {sliceStart}, {nslices} samples")
+
+        x = scan.get_main_axis_data()
+        xlabel = f"{scan.get_main_axis_title()} {scan.get_main_axis_symbol()}"
+
+        fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+        meanI, stdI, meanQ, stdQ = scan.get_signal_mean_iq(slice = dataslice)
+
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel("Signal $\mu V$")
+        ax[0].plot(x, meanI, label = "I")
+        ax[0].plot(x, meanQ, label = "Q")
+        ax[0].legend()
+        ax[0].grid()
+
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel("Noise $\mu V$")
+        ax[1].plot(x, stdI, label = "Istd")
+        ax[1].plot(x, stdQ, label = "Qstd")
+        ax[1].legend()
+        ax[1].grid()
+
+        plt.tight_layout()
+        #plt.savefig(f"{fileprefix}_signal.svg")
+        plt.savefig(f"{fileprefix}_signal_slices_{sliceStart}.png")
+        print(f"[IQMEANSLICES] Written {fileprefix}_signal_slices_{sliceStart}")
+        plt.close(fig)
+
+        meanI, stdI, meanQ, stdQ = scan.get_zero_mean_iq(slice = dataslice)
+        if meanI is not None:
+            fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+            ax[0].set_xlabel(xlabel)
+            ax[0].set_ylabel("Zero signal $\mu V$")
+            ax[0].plot(x, meanI, label = "IZero")
+            ax[0].plot(x, meanQ, label = "QZero")
+            ax[0].legend()
+            ax[0].grid()
+
+            ax[1].set_xlabel(xlabel)
+            ax[1].set_ylabel("Zero noise $\mu V$")
+            ax[1].plot(x, stdI, label = "IZero std")
+            ax[1].plot(x, stdQ, label = "QZero std")
+            ax[1].legend()
+            ax[1].grid()
+
+            plt.tight_layout()
+            #plt.savefig(f"{fileprefix}_zero.svg")
+            plt.savefig(f"{fileprefix}_zero_slices_{sliceStart}.png")
+            print(f"[IQMEANSLICES] Written {fileprefix}_zero_slices_{sliceStart}")
+            plt.close(fig)
+
+            meanI, stdI, meanQ, stdQ = scan.get_diff_mean_iq(slice = dataslice)
+            fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
+
+            ax[0].set_xlabel(xlabel)
+            ax[0].set_ylabel("Difference signal $\mu V$")
+            ax[0].plot(x, meanI, label = "IDiff")
+            ax[0].plot(x, meanQ, label = "QDiff")
+            ax[0].legend()
+            ax[0].grid()
+
+            ax[1].set_xlabel(xlabel)
+            ax[1].set_ylabel("Difference noise $\mu V$")
+            ax[1].plot(x, stdI, label = "IDiff std")
+            ax[1].plot(x, stdQ, label = "QDiff std")
+            ax[1].legend()
+            ax[1].grid()
+
+            plt.tight_layout()
+            #plt.savefig(f"{fileprefix}_diff.svg")
+            plt.savefig(f"{fileprefix}_diff_slices_{sliceStart}.png")
+            print(f"[IQMEANSLICES] Written {fileprefix}_diff_slices_{sliceStart}")
+            plt.close(fig)
+
+        sliceStart = sliceStart + nslices
+
+    print("[IQMEANSLICES] Finished")
+
+
 
 def main():
     jobs = []
@@ -784,6 +1072,8 @@ def main():
             jobs.append({ 'task' : 'iqmean' })
         elif sys.argv[i].strip() == "-apmean":
             jobs.append({ 'task' : 'apmean' })
+        elif sys.argv[i].strip() == "-powermean":
+            jobs.append({ 'task' : 'powermean' })
         elif sys.argv[i].strip() == "-offsettime":
             jobs.append({ 'task' : 'offsettime' })
         elif sys.argv[i].strip() == "-decompose":
@@ -803,6 +1093,8 @@ def main():
                 'reportdata' : [],
                 'columntitles' : []
             }
+        elif sys.argv[i].strip() == "-timejitter":
+            jobs.append({ 'task' : 'timejitter' })
         elif sys.argv[i].strip() == "-wndnoise":
             n = 0
             if i == (len(sys.argv)-1):
@@ -819,6 +1111,19 @@ def main():
             jobs.append({'task' : 'wndnoise', 'n' : n })
             # Skip N
             i = i + 1
+        elif sys.argv[i].strip() == "-iqslices":
+            n = 0
+            if i == (len(sys.argv)-1):
+                print("Missing slice length for iqslices")
+                sys.exit(1)
+            try:
+                n = int(sys.argv[i+1])
+            except:
+                print(f"Failed to interpret {sys.argv[i+1]} as window size (integer sample count)")
+                sys.exit(1)
+            jobs.append({'task' : 'iqmean_sliced', 'n' : n })
+            # Skip N
+            i = i+ 1
         else:
             if sys.argv[i].strip().startswith("-"):
                 print(f"Unrecognized option {sys.argv[i]}")
@@ -845,7 +1150,8 @@ def main():
                 print(e)
 
         # Execute jobs ...
-        scans = sc.get_scans()
+        scanQuantity, scanQuantityTitle, scanQuantityData, scans = sc.get_scans()
+        print(scans)
         for iscan, scan in enumerate(scans):
             if aggregateHTMLReport is not None:
                 aggregateHTMLReport['reportdata'].append({})
@@ -856,7 +1162,7 @@ def main():
                     aggregateHTMLReport['columntitles'].append("Scan")
 
             metrics = {}
-            if len(scans) > 2:
+            if len(scans) < 2:
                 fnprefix = f"{jobfile}"
             else:
                 fnprefix = f"{jobfile}_scan{iscan}"
@@ -878,6 +1184,12 @@ def main():
                     metrics_write(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
                 if job['task'] == "mixfit":
                     metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
+                if job['task'] == "iqmean_sliced":
+                    plot_iqmean_sliced(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport, nslices = job['n'])
+                if job['task'] == "timejitter":
+                    plot_timejitter(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                if job['task'] == "powermean":
+                    plot_powermean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
 
     if aggregateHTMLReport is not None:
         # Generate webpage containing a table with all generated graphics
