@@ -26,6 +26,7 @@ def printUsage():
         \t-iqmean\t\tGenerated I/Q mean and noise plots
         \t-iqslices N\t\tPlot I/Q mean and noise plots for slices N samples long
         \t-apmean\t\tGenerate amplitude and phase from I/Q samples
+        \t-powermean\tMean and standard deviation of power measurement
         \t-wndnoise N\tPlots noise in a sliding window of N samples
         \t-offsettime\tPlot offset change (mean of all samples) over time
         \t-allan\tPlot allan deviations for all sampled points along main axis
