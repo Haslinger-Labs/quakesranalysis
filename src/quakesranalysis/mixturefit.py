@@ -12,6 +12,9 @@ class Fitfunctions(Enum):
     DIFFCAUHCY = 4
     CONSTANT = 5
 
+    GAUSSIANANDDIFFGAUSSIAN = 6
+    CAUCHYANDDIFFCAUCHY = 7
+
     def __int__(self):
         return int(self.value)
 
@@ -112,6 +115,138 @@ class Fitfunction_Constant(Fitfunction):
             "offset" : np.mean(data)
         }
 
+class Fitfunction_CauchyAndDiffCauchy(Fitfunction):
+    def __init__(self):
+        super().__init__(
+            Fitfunctions.CAUCHYANDDIFFCAUCHY,
+            "Cauchy distribution",
+            [ "amp", "x0", "gamma", "offset", "offsetd", "phase" ],
+            [ "amplitude", "center", "gamma", "offset", "offsetd", "phase" ]
+        )
+
+    def _parse_pparms(self, ppars, parprefix):
+        if not isinstance(ppars, dict):
+            pars = ppars.valuesdict()
+        else:
+            pars = ppars
+
+        if pars is None:
+            amp = 1
+            x0 = 0
+            gamma = 1
+            offset = 0
+            offsetd = 0
+            phase = np.pi
+        else:
+            if parprefix is not None:
+                pfx = parprefix
+            else:
+                pfx = ""
+            amp = pars[f"{pfx}amp"]
+            x0 = pars[f"{pfx}x0"]
+            gamma = pars[f"{pfx}gamma"]
+            offset = pars[f"{pfx}offset"]
+            offsetd = pars[f"{pfx}offsetd"]
+            phase = pars[f"{pfx}phase"]
+
+        return amp, x0, gamma, offset, phase, offsetd
+
+    def eval(self, x, ppars = None, parprefix = None):
+        amp, x0, gamma, offset, phase, offsetd = self._parse_pparms(ppars, parprefix)
+        cauchy = (amp * 1.0 / (np.pi * gamma) * (gamma**2 / ((x - x0)**2 + gamma**2)) + offset) * np.cos(phase)
+        diffcauchy = (amp * -2.0 / (np.pi * gamma ** 3) * (x - x0) / ((x-x0)**2/gamma**2 + 1.0)**2.0 + offsetd) * np.sin(phase)
+        return cauchy + diffcauchy
+
+    def getCenterFWHM(self, ppars = None, parprefix = ""):
+        _, x0, gamma, _, _, _ = self._parse_pparms(ppars, parprefix)
+        return x0, 2*gamma
+
+    def get_guess(self, x, data):
+        if np.max(data) > np.min(data):
+            return {
+                "amp" : np.max(data) - np.min(data),
+                "x0" : x[np.argmax(data)],
+                "gamma" : x[np.argmin(data)] - x[np.argmax(data)],
+                "offset" : np.min(data),
+                "phase" : 0,
+                "offsetd" : (np.max(data) + np.min(data))/2.0
+            }
+        else:
+            return {
+                "amp" : - np.max(data) + np.min(data),
+                "x0" : x[np.argmin(data)],
+                "gamma" : x[np.argmax(data)] - x[np.argmin(data)],
+                "offset" : np.max(data),
+                "phase" : 0,
+                "offsetd" : (np.max(data) + np.min(data))/2.0
+            }
+
+class Fitfunction_GaussianAndDiffgaussian(Fitfunction):
+    def __init__(self):
+        super().__init__(
+            Fitfunctions.GAUSSIANANDDIFFGAUSSIAN,
+            "Gaussian",
+            [ "mu", "sigma", "amp", "offset", "offsetd", "phase" ],
+            [ "mu", "sigma", "amplitude", "offset", "offsetd", "phase" ]
+        )
+
+    def _parse_pparms(self, ppars, parprefix):
+        if not isinstance(ppars, dict):
+            pars = ppars.valuesdict()
+        else:
+            pars = ppars
+
+        if pars is None:
+            amp = 1
+            mu = 0
+            sig = 1
+            offs = 0
+            offsd = 0
+            phase = np.pi
+        else:
+            if parprefix is not None:
+                pfx = parprefix
+            else:
+                pfx = ""
+            amp = pars[f"{pfx}amp"]
+            mu = pars[f"{pfx}mu"]
+            sig = pars[f"{pfx}sigma"]
+            offs = pars[f"{pfx}offset"]
+            offsd = pars[f"{pfx}offsetd"]
+            phase = pars[f"{pfx}phase"]
+        return amp, mu, sig, offs, offsd, phase
+
+    def eval(self, x, ppars = None, parprefix = None):
+        amp, mu, sig, offs, offsd, phase = self._parse_pparms(ppars, parprefix)
+        gaussian = (amp * np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.))) + offs) * np.cos(phase)
+        dgaussian = (amp * np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.))) * -1.0 * (x - mu) / (sig * sig) + offsd) * np.sin(phase)
+        return gaussian + dgaussian
+
+    def getCenterFWHM(self, ppars = None, parprefix = ""):
+        _, mu, sig, _, _, _ = self._parse_pparms(ppars, parprefix)
+        return mu, 2*np.sqrt(2)*sig
+
+    def get_guess(self, x, data):
+        if np.abs(np.max(data)) > np.abs(np.min(data)):
+            return {
+                "amp" : np.max(data) - np.min(data),
+                "offset" : np.min(data),
+                "sigma" : 1,
+                "mu" : x[np.argmax(data)],
+                "phase" : 0,
+                "offsetd" : (np.max(data) + np.min(data))/2.0
+            }
+        else:
+            return {
+                "amp" : -1 * (np.min(data) - np.min(data)),
+                "offset" : np.max(data),
+                "sigma" : 1,
+                "mu" : x[np.argmin(data)],
+                "phase" : 0,
+                "offsetd" : (np.max(data) + np.min(data))/2.0
+            }
+
+    
 
 class Fitfunction_Cauchy(Fitfunction):
     def __init__(self):
@@ -338,11 +473,14 @@ class Fitfunction_Diffgaussian(Fitfunction):
 
 
 fitfunctionInstances = {
-    Fitfunctions.GAUSSIAN.value     : Fitfunction_Gaussian(),
-    Fitfunctions.DIFFGAUSSIAN.value : Fitfunction_Diffgaussian(),
-    Fitfunctions.CAUCHY.value       : Fitfunction_Cauchy(),
-    Fitfunctions.DIFFCAUHCY.value   : Fitfunction_DiffCauchy(),
-    Fitfunctions.CONSTANT.value     : Fitfunction_Constant()
+    #Fitfunctions.GAUSSIAN.value     : Fitfunction_Gaussian(),
+    #Fitfunctions.DIFFGAUSSIAN.value : Fitfunction_Diffgaussian(),
+    #Fitfunctions.CAUCHY.value       : Fitfunction_Cauchy(),
+    #Fitfunctions.DIFFCAUHCY.value   : Fitfunction_DiffCauchy(),
+    #Fitfunctions.CONSTANT.value     : Fitfunction_Constant()
+
+    Fitfunctions.CAUCHYANDDIFFCAUCHY.value : Fitfunction_CauchyAndDiffCauchy(),
+    Fitfunctions.GAUSSIANANDDIFFGAUSSIAN.value : Fitfunction_GaussianAndDiffgaussian()
 }
 
 class MixtureFitter:
@@ -580,6 +718,18 @@ class MixtureFitter:
         fig.tight_layout()
 
         return fig, ax
+
+    def mixtures2componentplots(self, sigx, mixture, y1 = None, y2 = None, y1Label = None, y2Label = None, yunitlabel = "", chanlabel = ""):
+        if isinstance(mixture, Parameters):
+            p = mixture.valuesdict()
+        else:
+            p = mixture
+
+        for ielement in range(p["n"]):
+
+            y = fitfunctionInstances[p[f"f{ielement}_type"]].eval(sigx, )
+            center, fwhm = fitfunctionInstances[p[f"f{ielement}_type"]].getCenterFWHM(mixture, f"f{ielement}_")
+            paras = fitfunctionInstances[p[f"f{ielement}_type"]].paramdict(mixture, f"f{ielement}_")
 
 
 if __name__ == "__main__":
