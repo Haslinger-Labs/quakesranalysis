@@ -1,4 +1,7 @@
 import sys
+sys.path.append("../")
+sys.path.append("../../")
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -879,14 +882,14 @@ def plot_powermean(fileprefix, scan, aggregateHTMLReport = None):
         stdP = np.full((len(x)), np.nan)
 
     ax[0].set_xlabel(xlabel)
-    ax[0].set_ylabel("Power $dBm$")
-    ax[0].plot(x, meanP, label = "P")
+    ax[0].set_ylabel("RF Power $mV_{rms}$")
+    ax[0].plot(x, meanP * 1e3, label = "P")
     ax[0].legend()
     ax[0].grid()
 
     ax[1].set_xlabel(xlabel)
-    ax[1].set_ylabel("Noise $dBm$")
-    ax[1].plot(x, stdP, label = "Pstd")
+    ax[1].set_ylabel("RF power noise $mV_{rms}$")
+    ax[1].plot(x, stdP * 1e3, label = "Pstd")
     ax[1].legend()
     ax[1].grid()
 
@@ -903,27 +906,27 @@ def plot_powermean(fileprefix, scan, aggregateHTMLReport = None):
             aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] = ""
         aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mean power"] + f"<img src=\"{fileprefix}_signal_power.png\" alt=\"\"><br>"
 
-    meanP, stdP = scan.get_zero_mean_power()
+    meanPzero, stdPzero = scan.get_zero_mean_power()
 
-    if meanP is not None:
+    if meanPzero is not None:
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
 
         ax[0].set_xlabel(xlabel)
-        ax[0].set_ylabel("Zero power $dBm$")
-        ax[0].plot(x, meanP, label = "PZero")
+        ax[0].set_ylabel("Zero RF power $mV_{rms}$")
+        ax[0].plot(x, meanPzero * 1e3, label = "PZero")
         ax[0].legend()
         ax[0].grid()
 
         ax[1].set_xlabel(xlabel)
-        ax[1].set_ylabel("Zero power noise $dBm$")
-        ax[1].plot(x, stdP, label = "PZero std")
+        ax[1].set_ylabel("Zero RF power noise $mV_{rms}$")
+        ax[1].plot(x, stdPzero * 1e3, label = "PZero std")
         ax[1].legend()
         ax[1].grid()
 
         plt.tight_layout()
         #plt.savefig(f"{fileprefix}_zero.svg")
         plt.savefig(f"{fileprefix}_zero_power.png")
-        print(f"[IQMEAN] Written {fileprefix}_zero_power")
+        print(f"[POWERMEAN] Written {fileprefix}_zero_power")
         plt.close(fig)
 
         if aggregateHTMLReport is not None:
@@ -933,17 +936,20 @@ def plot_powermean(fileprefix, scan, aggregateHTMLReport = None):
                 aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] = ""
             aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Zero mean power"] + f"<img src=\"{fileprefix}_zero_power.png\" alt=\"\"><br>"
 
-        meanP, stdP = scan.get_diff_mean_power()
+        #meanP, stdP = scan.get_diff_mean_power()
+        stdP = np.sqrt(stdP * stdP + stdPzero * stdPzero) * 1e6
+        meanP = (meanP - meanPzero) * 1e6
+
         fig, ax = plt.subplots(1, 2, figsize=(6.4*2, 4.8))
 
         ax[0].set_xlabel(xlabel)
-        ax[0].set_ylabel("Difference power $dBm$")
+        ax[0].set_ylabel("RF power $\mu V_{rms}$")
         ax[0].plot(x, meanP, label = "PDiff")
         ax[0].legend()
         ax[0].grid()
 
         ax[1].set_xlabel(xlabel)
-        ax[1].set_ylabel("Difference power $dBmV$")
+        ax[1].set_ylabel("Difference RF power noise $\mu V_{rms}$")
         ax[1].plot(x, stdP, label = "PDiff std")
         ax[1].legend()
         ax[1].grid()
