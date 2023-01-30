@@ -94,6 +94,12 @@ class QUAKESRScan:
         self._sigPDiff_Mean = None
         self._sigPDiff_Std = None
 
+        # Convert power into V
+        if self._sigP is not None:
+            self._sigP = np.sqrt(np.power(10, self._sigP / 10) * 1e-3 * 50)
+        if self._sigPZero is not None:
+            self._sigPZero = np.sqrt(np.power(10, self._sigPZero / 10) * 1e-3 * 50)
+
         self._filename = filename
 
     def get_scans(self):
