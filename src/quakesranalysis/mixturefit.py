@@ -119,7 +119,7 @@ class Fitfunction_CauchyAndDiffCauchy(Fitfunction):
     def __init__(self):
         super().__init__(
             Fitfunctions.CAUCHYANDDIFFCAUCHY,
-            "Cauchy distribution",
+            "Cauchy and differential Cauchy distribution",
             [ "amp", "x0", "gamma", "offset", "offsetd", "phase" ],
             [ "amplitude", "center", "gamma", "offset", "offsetd", "phase" ]
         )
@@ -162,7 +162,55 @@ class Fitfunction_CauchyAndDiffCauchy(Fitfunction):
         return x0, 2*gamma
 
     def get_guess(self, x, data):
-        if np.max(data) > np.min(data):
+        # FIrst determine if we take a guess for the differential
+        # or the Cauchy distribution
+        if (np.trapz(data - np.mean(data)) < 1e-4):
+            # Assume it's a cauchy
+            if np.abs(np.mean(data) - np.max(data)) >= np.abs(np.mean(data) - np.max(data)):
+                # Assume positive amplitude
+                return {
+                    "amp" : np.max(data) - np.min(data),
+                    "x0" : x[np.argmax(data)],
+                    "gamma" : 1,
+                    "offset" : np.min(data),
+                    "phase" : 0,
+                    "offsetd" : (np.max(data) + np.min(data))/2.0
+                }
+            else:
+                # Assume negative amplitude
+                return {
+                    "amp" : -(np.max(data) - np.min(data)),
+                    "x0" : x[np.argmin(data)],
+                    "gamma" : 1,
+                    "offset" : np.max(data),
+                    "phase" : 0,
+                    "offsetd" : (np.max(data) + np.min(data))/2.0
+                }
+        else:
+            # Assume it's a differentiated cauchy
+            if np.argmax(data) >= np.argmin(data):
+                # Assume positive amplitude
+                return {
+                    "amp" : (np.max(data) - np.min(data)) / 2.0,
+                    "x0" : x[int((np.argmin(data) + np.argmax(data)) / 2.0)],
+                    "gamma" : x[np.argmin(data)] - x[np.argmax(data)],
+                    "offset" : np.mean(data),
+                    "phase" : np.pi/2,
+                    "offsetd" : np.mean(data)
+                }
+            else:
+                # Assume negative amplitude
+                return {
+                    "amp" : -(np.max(data) - np.min(data)) / 2.0,
+                    "x0" : x[int((np.argmin(data) + np.argmax(data)) / 2.0)],
+                    "gamma" : x[np.argmax(data)] - x[np.argmin(data)],
+                    "offset" : np.mean(data),
+                    "phase" : np.pi/2,
+                    "offsetd" : np.mean(data)
+                }
+
+
+        if np.abs(np.max(data)) > np.abs(np.min(data)):
             return {
                 "amp" : np.max(data) - np.min(data),
                 "x0" : x[np.argmax(data)],
@@ -185,7 +233,7 @@ class Fitfunction_GaussianAndDiffgaussian(Fitfunction):
     def __init__(self):
         super().__init__(
             Fitfunctions.GAUSSIANANDDIFFGAUSSIAN,
-            "Gaussian",
+            "Gaussian and differential Gaussian",
             [ "mu", "sigma", "amp", "offset", "offsetd", "phase" ],
             [ "mu", "sigma", "amplitude", "offset", "offsetd", "phase" ]
         )
@@ -489,8 +537,8 @@ class MixtureFitter:
 
         allowedFunctions = None,
         minimumResiduumImprovement = 0,
-        maxiterations = 1000,
-        stoperror = 1e-99
+        maxiterations = 5,
+        stoperror = 1
     ):
         self._allowedfunctions = []
         self._maxiterations = maxiterations
@@ -558,6 +606,8 @@ class MixtureFitter:
             print(f"[MIXFIT] Starting fit (prefix {debugplotsprefix})")
 
         while (len(chis) < 2) or ((chis[len(chis)-1] < chis[len(chis)-2]) and (len(chis) < self._maxiterations) and ((chis[len(chis)-2] - chis[len(chis)-1]) > self._minimumResiduumImprovement) and (chis[len(chis)-1] > self._stoperror)):
+            #if len(chis) > 2:
+            #    break
             if printprogress:
                 print(f"[MIXFIT] Iteration {len(chis)+1} (prefix {debugplotsprefix})")
 
@@ -649,13 +699,14 @@ class MixtureFitter:
                     plt.show()
                 if debugplotsprefix is not None:
                     plt.savefig(f"{debugplotsprefix}iter_{len(chis)}.png")
+                    plt.close()
                 plt.close()
 
         # In case we include elements that did not improve or did not improve enough -> remove them from our result
         while (len(chis) > 2) and ((chis[len(chis)-1] > chis[len(chis)-2]) or ((chis[len(chis)-2] - chis[len(chis)-1]) < self._minimumResiduumImprovement)):
             chis = chis[:-1]
             fittedFunctions['n'] = fittedFunctions['n'] - 1
-        while chis[len(chis)-1]  < self._stoperror:
+        while (len(chis) > 0) and chis[len(chis)-1]  < self._stoperror:
             chis = chis[:-1]
             fittedFunctions['n'] = fittedFunctions['n'] - 1
 
@@ -725,11 +776,23 @@ class MixtureFitter:
         else:
             p = mixture
 
-        for ielement in range(p["n"]):
+        if p["n"] < 1:
+            return None, None
 
-            y = fitfunctionInstances[p[f"f{ielement}_type"]].eval(sigx, )
-            center, fwhm = fitfunctionInstances[p[f"f{ielement}_type"]].getCenterFWHM(mixture, f"f{ielement}_")
-            paras = fitfunctionInstances[p[f"f{ielement}_type"]].paramdict(mixture, f"f{ielement}_")
+        fig, ax = plt.subplots(p["n"], 1, squeeze = False, figsize = (6.4 * 1, 4.8 * p["n"]))
+
+        for ielement in range(p["n"]):
+            print(f"Plotting {ielement} for channel {chanlabel}")
+            y = fitfunctionInstances[p[f"f{ielement}_type"]].eval(sigx, p, f"f{ielement}_")
+            #ax[ielement][0].plot(sigx, y, 'r--', label = fitfunctionInstances[p[f"f{ielement}_type"]].paramstring() + "\n" + fitfunctionInstances[p[f"f{ielement}_type"]].paramstring(p, f"f{ielement}_type"))
+            ax[ielement][0].plot(sigx, y, 'r--', label = fitfunctionInstances[p[f"f{ielement}_type"]].paramstring() + "\n" + fitfunctionInstances[p[f"f{ielement}_type"]].paramstring(p, f"f{ielement}_"))
+            ax[ielement][0].grid()
+            ax[ielement][0].legend()
+            ax[ielement][0].set_ylabel(f"{yunitlabel}")
+
+        return fig, ax
+
+
 
 
 if __name__ == "__main__":

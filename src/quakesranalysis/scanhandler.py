@@ -141,6 +141,9 @@ class QUAKESRScan:
             return self._sigIZero[:, slice[0] : slice[0] + slice[1]], self._sigQZero[:, slice[0] : slice[0] + slice[1]]
 
     def get_raw_signal_timestamps(self, slice = None):
+        if self._sigT is None:
+            return None
+
         if slice is None:
             return self._sigT
         else:
@@ -155,6 +158,8 @@ class QUAKESRScan:
             return self._sigT[:, slice[0] : slice[0] + slice[1]]
 
     def get_raw_zero_timestamps(self, slice = None):
+        if self._sigTZero is None:
+            return None
         if slice is None:
             return self._sigTZero
         else:
@@ -202,6 +207,9 @@ class QUAKESRScan:
             return sigI_Mean, sigI_Std, sigQ_Mean, sigQ_Std
 
     def get_signal_mean_power(self, slice = None):
+        if self._sigP is None:
+            return np.full(self._main_axis_data.shape, np.nan), np.full(self._main_axis_data.shape, np.nan)
+
         if slice is None:
             if self._sigP_Mean is not None:
                 return self._sigP_Mean, self._sigP_Std
@@ -219,7 +227,8 @@ class QUAKESRScan:
 
     def get_zero_mean_power(self, slice = None):
         if self._sigPZero is None:
-            return None, None
+            return np.full(self._main_axis_data.shape, np.nan), np.full(self._main_axis_data.shape, np.nan)
+
         if slice is None:
             if self._sigPZero_Mean is not None:
                 return self._sigPZero_Mean, self._sigPZero_Std
@@ -442,7 +451,22 @@ class QUAKESRScan1D:
                 sigIZero = data["sigIzero"][iScanParam]
                 sigQZero = data["sigQzero"][iScanParam]
 
-            newscan = QUAKESRScan(mainAxisData, mainAxis, mainAxisTitle, data["sigI"][iScanParam], data["sigQ"][iScanParam], sigIZero, sigQZero, f"{filename}_scan_{scanParam}")
+            sigT = None
+            sigTZero = None
+            sigP = None
+            sigPZero = None
+
+            if "sigT" in data:
+                sigT = data["sigT"]
+            if "sigTzero" in data:
+                sigTZero = data["sigTzero"]
+            if "sigP" in data:
+                sigP = data["sigP"]
+            if "sigPzero" in data:
+                sigPZero = data["sigPzero"]
+
+
+            newscan = QUAKESRScan(mainAxisData, mainAxis, mainAxisTitle, data["sigI"][iScanParam], data["sigQ"][iScanParam], sigIZero, sigQZero, sigT, sigTZero, sigP, sigPZero, f"{filename}_scan_{scanParam}")
             scans.append(newscan)
 
         return QUAKESRScan1D(scanned_quantity, scanned_quantity_data, scanned_quantity_title, scans)
@@ -451,8 +475,8 @@ class QUAKESRScan1D:
     def __init__(self, scannedQuantity, scannedQuantityData, scannedQuantityTitle, scans):
         self._scanned_quantity = scannedQuantity
         self._scanned_quantity_data = scannedQuantityData
-        self._scanned_quantity_title = scannedQuantityTitle
         self._scans = scans
+        self._scanned_quantity_title = scannedQuantityTitle
 
     def get_scans(self):
         return self._scanned_quantity, self._scanned_quantity_title, self._scanned_quantity_data, self._scans

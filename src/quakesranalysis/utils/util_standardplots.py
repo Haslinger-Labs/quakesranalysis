@@ -211,19 +211,25 @@ def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False
         chanlist = chanlist + [ 'IZero' , 'QZero' , 'AZero', 'IDiff', 'QDiff', 'ADiff' ]
 
     for chan in chanlist:
-        fig, ax = mf.mixtures2barplot(resmixture[chan], yunitlabel = scanxsymbol, chanlabel = chan)
-        plt.savefig(f"{fileprefix}_mixfit_{chan}.png")
-        plt.close()
-        print(f"[MIXFIT] Written {fileprefix}_mixfit_{chan}")
+        #fig, ax = mf.mixtures2barplot(resmixture[chan], yunitlabel = scanxsymbol, chanlabel = chan)
+        #plt.savefig(f"{fileprefix}_mixfit_{chan}.png")
+        #plt.close()
+        #print(f"[MIXFIT] Written {fileprefix}_mixfit_{chan}")
 
-        if aggregateHTMLReport is not None:
-            if f"Mixture fit report ({chan})" not in aggregateHTMLReport['columntitles']:
-                aggregateHTMLReport['columntitles'].append(f"Mixture fit report ({chan})")
-            if f"Mixture fit report ({chan})" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
-                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = ""
-            aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] + f"<img src=\"{fileprefix}_mixfit_{chan}.png\" alt=\"\"><br>"
+        #if aggregateHTMLReport is not None:
+        #    if f"Mixture fit report ({chan})" not in aggregateHTMLReport['columntitles']:
+        #        aggregateHTMLReport['columntitles'].append(f"Mixture fit report ({chan})")
+        #    if f"Mixture fit report ({chan})" not in aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]:
+        #        aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = ""
+        #    aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] = aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1][f"Mixture fit report ({chan})"] + f"<img src=\"{fileprefix}_mixfit_{chan}.png\" alt=\"\"><br>"
 
         metrics['decompose'][chan] = mf.mixtures2dictlist(resmixture[chan])
+
+        fig, ax = mf.mixtures2componentplots(scanx, resmixture[chan], yunitlabel = scanxsymbol, chanlabel = chan)
+        if fig != None:
+            plt.savefig(f"{fileprefix}_mixcomponents_{chan}.png")
+            plt.close()
+        print(f"[MIXFIT] Written {fileprefix}_mixcomponents_{chan}")
 
     print("[MIXFIT] Done")
     return metrics
@@ -776,6 +782,7 @@ def plot_timejitter(fileprefix, scan, aggregateHTMLReport = None):
     meanT = scan.get_raw_signal_timestamps()
     if meanT is None:
         print(f"[TIMEJITTER] No timing data present")
+        return
 
     meanTZero = scan.get_raw_zero_timestamps()
 
