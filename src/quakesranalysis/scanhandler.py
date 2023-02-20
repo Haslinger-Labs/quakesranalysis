@@ -270,12 +270,18 @@ class QUAKESRScan:
             if self._sig_Amp is not None:
                 return self._sig_Amp, self._sig_Phase
 
-            if self._sigI_Mean is None:
-                # Generate mean and standard deviations
-                _, _, _, _ = self.get_signal_mean_iq()
+            #if self._sigI_Mean is None:
+            #    # Generate mean and standard deviations
+            #    _, _, _, _ = self.get_signal_mean_iq()
 
-            self._sig_Amp = np.sqrt(self._sigI_Mean * self._sigI_Mean + self._sigQ_Mean * self._sigQ_Mean)
-            self._sig_Phase = np.arctan(self._sigQ_Mean / self._sigI_Mean)
+            #self._sig_Amp = np.sqrt(self._sigI_Mean * self._sigI_Mean + self._sigQ_Mean * self._sigQ_Mean)
+            #self._sig_Phase = np.arctan(self._sigQ_Mean / self._sigI_Mean)
+
+            self._sig_Amp = np.zeros(self._main_axis_data.shape)
+            self._sig_Phase = np.zeros(self._main_axis_data.shape)
+            for i in range(len(self._main_axis_data)):
+                self._sig_Amp[i] = np.mean(np.sqrt(self._sigI[i] * self._sigI[i] + self._sigQ[i] * self._sigQ[i]))
+                self._sig_Phase[i] = np.mean(np.arctan(self._sigQ[i] / self._sigI[i]))
 
             return self._sig_Amp, self._sig_Phase
         else:
