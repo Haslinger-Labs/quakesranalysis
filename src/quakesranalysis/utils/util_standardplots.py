@@ -181,18 +181,22 @@ def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False
 
     meanI, _, meanQ, _ = scan.get_signal_mean_iq()
     amp, _ = scan.get_signal_ampphase()
+    pwr, _ = scan.get_signal_mean_power()
 
     meanIZero, _, meanQZero, _ = scan.get_zero_mean_iq()
     ampZero, _ = scan.get_zero_ampphase()
+    pwrZero, _ = scan.get_zero_mean_power()
     meanIDiff, _, meanQDiff, _ = scan.get_diff_mean_iq()
     ampDiff, _ = scan.get_diff_ampphase()
+    pwrDiff, _ = scan.get_diff_mean_power()
 
     metrics['decompose'] = {}
 
     resmixture = {
         'I' : mf.fitMixture(scanx, meanI, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_I", printprogress = True),
         'Q' : mf.fitMixture(scanx, meanQ, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_Q", printprogress = True),
-        'A' : mf.fitMixture(scanx, amp, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_A", printprogress = True)
+        'A' : mf.fitMixture(scanx, amp, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_A", printprogress = True),
+        'P' : mf.fitMixture(scanx, pwr, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_P", printprogress = True)
     }
 
     if meanIZero is not None:
@@ -200,15 +204,17 @@ def plot_decompose_mixturefit(fileprefix, scan, metrics = {}, debugplots = False
             'IZero' : mf.fitMixture(scanx, meanIZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_IZero", printprogress = True),
             'QZero' : mf.fitMixture(scanx, meanQZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_QZero", printprogress = True),
             'AZero' : mf.fitMixture(scanx, ampZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_AZero", printprogress = True),
+            'PZero' : mf.fitMixture(scanx, pwrZero, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_PZero", printprogress = True),
 
             'IDiff' : mf.fitMixture(scanx, meanIDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_IDiff", printprogress = True),
             'QDiff' : mf.fitMixture(scanx, meanQDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_QDiff", printprogress = True),
-            'ADiff' : mf.fitMixture(scanx, ampDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_ADiff", printprogress = True)
+            'ADiff' : mf.fitMixture(scanx, ampDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_ADiff", printprogress = True),
+            'PDiff' : mf.fitMixture(scanx, pwrDiff, debugplots = debugplots, debugplotsshow = False, debugplotsprefix = f"{fileprefix}_mixfit_PDiff", printprogress = True)
         }
 
     chanlist = [ 'I', 'Q', 'A' ]
     if meanIZero is not None:
-        chanlist = chanlist + [ 'IZero' , 'QZero' , 'AZero', 'IDiff', 'QDiff', 'ADiff' ]
+        chanlist = chanlist + [ 'IZero' , 'QZero' , 'AZero', 'PZero', 'IDiff', 'QDiff', 'ADiff', 'PDiff' ]
 
     for chan in chanlist:
         #fig, ax = mf.mixtures2barplot(resmixture[chan], yunitlabel = scanxsymbol, chanlabel = chan)
@@ -1151,56 +1157,59 @@ def main():
         i = i + 1
 
     for jobfile in jobfiles:
-        sc = None
-        if jobfile.endswith(".npz"):
-            # Try to load as single scan or as 1D scan
-            try:
-                sc = scanhandler.load_npz(jobfile)
-            except Exception as e:
-                print(f"Failed to load {jobfile} due to NPZ error:")
-                print(e)
+        try:
+            sc = None
+            if jobfile.endswith(".npz"):
+                # Try to load as single scan or as 1D scan
+                try:
+                    sc = scanhandler.load_npz(jobfile)
+                except Exception as e:
+                    print(f"Failed to load {jobfile} due to NPZ error:")
+                    print(e)
 
-        # Execute jobs ...
-        scanQuantity, scanQuantityTitle, scanQuantityData, scans = sc.get_scans()
-        print(scans)
-        for iscan, scan in enumerate(scans):
-            if aggregateHTMLReport is not None:
-                aggregateHTMLReport['reportdata'].append({})
-                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Run'] = jobfile
-                aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Scan'] = str(scan)
-                if "Run" not in aggregateHTMLReport['columntitles']:
-                    aggregateHTMLReport['columntitles'].append("Run")
-                    aggregateHTMLReport['columntitles'].append("Scan")
+            # Execute jobs ...
+            scanQuantity, scanQuantityTitle, scanQuantityData, scans = sc.get_scans()
+            print(scans)
+            for iscan, scan in enumerate(scans):
+                if aggregateHTMLReport is not None:
+                    aggregateHTMLReport['reportdata'].append({})
+                    aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Run'] = jobfile
+                    aggregateHTMLReport['reportdata'][len(aggregateHTMLReport['reportdata'])-1]['Scan'] = str(scan)
+                    if "Run" not in aggregateHTMLReport['columntitles']:
+                        aggregateHTMLReport['columntitles'].append("Run")
+                        aggregateHTMLReport['columntitles'].append("Scan")
 
-            metrics = {}
-            if len(scans) < 2:
-                fnprefix = f"{jobfile}"
-            else:
-                fnprefix = f"{jobfile}_scan{iscan}"
-            for job in jobs:
-                if job['task'] == "iqmean":
-                    plot_iqmean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "apmean":
-                    plot_ampphase(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "wndnoise":
-                    plot_wndnoise(fnprefix, scan, job, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "offsettime":
-                    plot_offsettime(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "decompose":
-                    metrics = plot_decompose(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "allan":
-                    plot_allan(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "metrics":
-                    metrics = metrics_collect_core(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
-                    metrics_write(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "mixfit":
-                    metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "iqmean_sliced":
-                    plot_iqmean_sliced(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport, nslices = job['n'])
-                if job['task'] == "timejitter":
-                    plot_timejitter(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
-                if job['task'] == "powermean":
-                    plot_powermean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                metrics = {}
+                if len(scans) < 2:
+                    fnprefix = f"{jobfile}"
+                else:
+                    fnprefix = f"{jobfile}_scan{iscan}"
+                for job in jobs:
+                    if job['task'] == "iqmean":
+                        plot_iqmean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "apmean":
+                        plot_ampphase(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "wndnoise":
+                        plot_wndnoise(fnprefix, scan, job, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "offsettime":
+                        plot_offsettime(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "decompose":
+                        metrics = plot_decompose(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "allan":
+                        plot_allan(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "metrics":
+                        metrics = metrics_collect_core(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
+                        metrics_write(fnprefix, scan, metrics, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "mixfit":
+                        metrics = plot_decompose_mixturefit(fnprefix, scan, metrics = metrics, debugplots = job['debug'], aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "iqmean_sliced":
+                        plot_iqmean_sliced(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport, nslices = job['n'])
+                    if job['task'] == "timejitter":
+                        plot_timejitter(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+                    if job['task'] == "powermean":
+                        plot_powermean(fnprefix, scan, aggregateHTMLReport = aggregateHTMLReport)
+        except:
+            print("Ignoring job due to previous errors ...")
 
     if aggregateHTMLReport is not None:
         # Generate webpage containing a table with all generated graphics
