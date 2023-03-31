@@ -63,3 +63,20 @@ a different backend such as ```TkAgg``` on via the ```MPLBACKEND``` environment 
 ```
 env MPLBACKEND=tkagg quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -mixfitdebug -allan *_peak.npz
 ```
+
+### ```quakesrslice```
+
+The ```quakesrslice``` utility is capable of slicing nD scans (1D/2D scans)
+into separate ```.npz``` files.
+
+```
+Usage: quakesrslice [OPTIONS] FILENAMES
+
+Slices nD scans into single NPZs
+
+Options:
+\t--outdir DIRECTORY
+\t\tWrite all sliced NPZs into the specified output directory (setable
+\t\tonly once for all input files)
+```
+
