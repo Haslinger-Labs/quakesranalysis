@@ -80,3 +80,30 @@ Options:
 \t\tonly once for all input files)
 ```
 
+### ```quakesrfetch```
+
+```
+Usage: quakesrfetch [OPTIONS] FROMDATE [TODATE]
+
+Fetches all NPZ and run files from QUAK/ESR runs from the configured
+measurement directory that are taken since the specified dates and times.
+If no end date is specified all runs starting from the given timestamp will
+be fetched.
+
+The date and timestamps can be supplied either as
+
+	YYYYMMDD
+		When addressing a whole day
+	YYYYMMDDHHMMSS
+		When adressing a given date and time
+
+Options:
+	--outdir DIRECTORY
+		Write all fetched NPZs into the specified output directory
+	--list
+		Also write a list of fetched NPZs onto standard output to be passed
+		to an analysis tool
+	--sshkey KEYFILE
+		Specified the SSH keyfile to use. It's assumed to be a passwordless (!)
+		keyfile ...
+```
