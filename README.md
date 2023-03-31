@@ -19,22 +19,6 @@ pip install --upgrade quakesranalysis-tspspi
 
 ## Utilities
 
-### ```quakesrslice```
-
-The ```quakesrslice``` utility is capable of slicing nD scans (1D/2D scans)
-into separate ```.npz``` files.
-
-```
-Usage: quakesrslice [OPTIONS] FILENAMES
-
-Slices nD scans into single NPZs
-
-Options:
-\t--outdir DIRECTORY
-\t\tWrite all sliced NPZs into the specified output directory (setable
-\t\tonly once for all input files)
-```
-
 ### ```quakesrplot```
 
 The ```quakesrplot``` is capable of generating standard plots for single peak
@@ -77,5 +61,5 @@ of ```matplotlib``` tends to crash sometimes. One can then launch the applicatio
 a different backend such as ```TkAgg``` on via the ```MPLBACKEND``` environment variable:
 
 ```
-env MPLBACKEND=tkagg quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -mixfitdebug -allan *_peak.npz 
+env MPLBACKEND=tkagg quakesrplot -iqmean -apmean -wndnoise 10 -wndnoise 3 -offsettime -mixfitdebug -allan *_peak.npz
 ```
