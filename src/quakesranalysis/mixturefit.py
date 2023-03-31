@@ -14,6 +14,7 @@ class Fitfunctions(Enum):
 
     GAUSSIANANDDIFFGAUSSIAN = 6
     CAUCHYANDDIFFCAUCHY = 7
+    CAUCHYANDDIFFCAUCHYEPR = 8
 
     def __int__(self):
         return int(self.value)
@@ -55,7 +56,7 @@ class Fitfunction:
         for ik, k in enumerate(self._parsymbolname):
             if ik > 0:
                 res = res + ", "
-            res = f'{res}{k} {pars[f"{parprefix}{k}"]}'
+            res = f'{res}{k} {np.round(pars[f"{parprefix}{k}"], 2)}'
         res = res + ")"
 
         return res
@@ -164,7 +165,7 @@ class Fitfunction_CauchyAndDiffCauchy(Fitfunction):
     def get_guess(self, x, data):
         # FIrst determine if we take a guess for the differential
         # or the Cauchy distribution
-        if (np.trapz(data - np.mean(data)) < 1e-4):
+        if (np.trapz(data - np.mean(data)) > 1):
             # Assume it's a cauchy
             if np.abs(np.mean(data) - np.max(data)) >= np.abs(np.mean(data) - np.max(data)):
                 # Assume positive amplitude
@@ -294,6 +295,64 @@ class Fitfunction_GaussianAndDiffgaussian(Fitfunction):
                 "offsetd" : (np.max(data) + np.min(data))/2.0
             }
 
+class Fitfunction_CauchyAndDiffCauchyEPR(Fitfunction):
+    def __init__(self):
+        super().__init__(
+            Fitfunctions.CAUCHYANDDIFFCAUCHYEPR,
+            "BEWARE OF USING! Cauchy and differential Cauchy distribution at 202 MHz, 4 uV amplitude, 30 degree phase between differential and non differential ...",
+            [ "amp", "x0", "gamma", "offset", "offsetd", "phase" ],
+            [ "amplitude", "center", "gamma", "offset", "offsetd", "phase" ]
+        )
+
+    def _parse_pparms(self, ppars, parprefix):
+        if not isinstance(ppars, dict):
+            pars = ppars.valuesdict()
+        else:
+            pars = ppars
+
+        if pars is None:
+            amp = 1
+            x0 = 0
+            gamma = 1
+            offset = 0
+            offsetd = 0
+            phase = np.pi
+        else:
+            if parprefix is not None:
+                pfx = parprefix
+            else:
+                pfx = ""
+            amp = pars[f"{pfx}amp"]
+            x0 = pars[f"{pfx}x0"]
+            gamma = pars[f"{pfx}gamma"]
+            offset = pars[f"{pfx}offset"]
+            offsetd = pars[f"{pfx}offsetd"]
+            phase = pars[f"{pfx}phase"]
+
+        return amp, x0, gamma, offset, phase, offsetd
+
+    def eval(self, x, ppars = None, parprefix = None):
+        amp, x0, gamma, offset, phase, offsetd = self._parse_pparms(ppars, parprefix)
+        cauchy = (amp * 1.0 / (np.pi * gamma) * (gamma**2 / ((x - x0)**2 + gamma**2)) + offset) * np.cos(phase)
+        diffcauchy = (amp * -2.0 / (np.pi * gamma ** 3) * (x - x0) / ((x-x0)**2/gamma**2 + 1.0)**2.0 + offsetd) * np.sin(phase)
+        return cauchy + diffcauchy
+
+    def getCenterFWHM(self, ppars = None, parprefix = ""):
+        _, x0, gamma, _, _, _ = self._parse_pparms(ppars, parprefix)
+        return x0, 2*gamma
+
+    def get_guess(self, x, data):
+        # FIrst determine if we take a guess for the differential
+        # or the Cauchy distribution
+        print(f"[DEBUG]: {np.trapz(data - np.mean(data))}")
+        return {
+            "amp" : 5,
+            "x0" : 202,
+            "gamma" : 1.5,
+            "offset" : np.min(data),
+            "phase" : 30,
+            "offsetd" : np.max(data) - np.min(data)
+        }
     
 
 class Fitfunction_Cauchy(Fitfunction):
@@ -528,7 +587,8 @@ fitfunctionInstances = {
     #Fitfunctions.CONSTANT.value     : Fitfunction_Constant()
 
     Fitfunctions.CAUCHYANDDIFFCAUCHY.value : Fitfunction_CauchyAndDiffCauchy(),
-    Fitfunctions.GAUSSIANANDDIFFGAUSSIAN.value : Fitfunction_GaussianAndDiffgaussian()
+    Fitfunctions.GAUSSIANANDDIFFGAUSSIAN.value : Fitfunction_GaussianAndDiffgaussian(),
+    Fitfunctions.CAUCHYANDDIFFCAUCHYEPR.value : Fitfunction_CauchyAndDiffCauchyEPR()
 }
 
 class MixtureFitter:
