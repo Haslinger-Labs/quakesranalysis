@@ -463,13 +463,13 @@ class QUAKESRScan1D:
             sigPZero = None
 
             if "sigT" in data:
-                sigT = data["sigT"]
+                sigT = data["sigT"][iScanParam]
             if "sigTzero" in data:
-                sigTZero = data["sigTzero"]
+                sigTZero = data["sigTzero"][iScanParam]
             if "sigP" in data:
-                sigP = data["sigP"]
+                sigP = data["sigP"][iScanParam]
             if "sigPzero" in data:
-                sigPZero = data["sigPzero"]
+                sigPZero = data["sigPzero"][iScanParam]
 
 
             newscan = QUAKESRScan(mainAxisData, mainAxis, mainAxisTitle, data["sigI"][iScanParam], data["sigQ"][iScanParam], sigIZero, sigQZero, sigT, sigTZero, sigP, sigPZero, f"{filename}_scan_{scanParam}")
